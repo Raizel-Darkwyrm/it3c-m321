@@ -19,6 +19,23 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /** Prüft die echte YAML-Datei mit kontrollierten Variablen unabhängig von lokaler .env. */
 class ApplicationConfigurationTest {
 
+    /** Manuelle Bestätigung und ein begrenzter Consumer sind Voraussetzungen des Stapelablaufs. */
+    @Test
+    void configuresManualSingleConsumer() throws IOException {
+        Map<String, Object> variables = testVariables();
+        PropertySourcesPropertyResolver properties = loadProperties(variables);
+        String type = properties.getProperty("spring.rabbitmq.listener.type");
+        String mode = properties.getProperty("spring.rabbitmq.listener.simple.acknowledge-mode");
+        String prefetch = properties.getProperty("spring.rabbitmq.listener.simple.prefetch");
+        String concurrency = properties.getProperty("spring.rabbitmq.listener.simple.concurrency");
+        String maxConcurrency = properties.getProperty("spring.rabbitmq.listener.simple.max-concurrency");
+        assertEquals("simple", type);
+        assertEquals("manual", mode);
+        assertEquals("500", prefetch);
+        assertEquals("1", concurrency);
+        assertEquals("1", maxConcurrency);
+    }
+
     /** Pool und Treiber brauchen eigene Grenzen, bevor überhaupt eine SQL-Transaktion läuft. */
     @Test
     void limitsConnectionAndSocketWaits() throws IOException {

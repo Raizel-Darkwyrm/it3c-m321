@@ -15,7 +15,7 @@ Als Vorbild dient [plan-chat-service.md](plan-chat-service.md): kleine Aufgaben,
 - Prüfen und committen nur die zur Aufgabe gehörenden Pfade. Kein pauschales `git add .`. `.env` und der private Ordner `Erklärungen` bleiben ausgeschlossen.
 - Im Plan erst nach tatsächlichem Abschluss ein Häkchen setzen; diese Statusänderung gehört in den jeweiligen Aufgaben-Commit. Keine nachträgliche Umordnung, um eine abweichende Git-Historie zu verdecken. Notwendige Plananpassungen vor ihrer Umsetzung begründen und separat dokumentieren.
 - Vorgeschlagene Commit-Messages sind deutsch, Code-Bezeichner und Logs englisch. Jede geschriebene Klasse, jeder Record, Konstruktor und jede Methode einschliesslich Tests bekommt einen deutschen erklärenden Kommentar. Keine Streams, keine Vorrats-Interfaces.
-- Zwischenstände sind noch kein abnahmefähiger Gesamtstack. Bis Aufgabe 12 gibt es bewusst keinen laufenden produktiven Queue-Consumer. Bis Aufgabe 18 gibt es keinen Writer-Container im Compose-Stack.
+- Zwischenstände sind noch kein abnahmefähiger Gesamtstack. Bis einschliesslich Aufgabe 11 gibt es bewusst keinen laufenden produktiven Queue-Consumer; Aufgabe 12 verbindet den Empfang. Bis Aufgabe 18 gibt es keinen Writer-Container im Compose-Stack.
 - Tests verwenden eigene RabbitMQ-/PostgreSQL-Testcontainer. Diese dürfen für unabhängige Tests isoliert werden. Der abschliessende Compose-Durchlauf S2–S8 verwendet dagegen denselben Stack ohne Aufräumen und übernimmt die zwei Instanzen aus S6 nach S7.
 
 ## Offene Prüfungen zum Nachholen
@@ -25,7 +25,7 @@ Diese Liste betrifft bereits bearbeitete Aufgaben; Tests späterer Aufgaben
 sind weiterhin dort geplant. Kein Test wird wegen dieser Markierung deaktiviert.
 Erst nach erfolgreicher Ausführung mit Datum und Ergebnis abhaken.
 
-Aktueller Stand nach Aufgabe 11: N1–N12 **noch nicht ausgeführt für den aktuellen
+Aktueller Stand nach Aufgabe 12: N1–N13 **noch nicht ausgeführt für den aktuellen
 Stand – Docker/Compose fehlt**. Frühere Fehlversuche unten bleiben als Historie
 erhalten und werden nicht wiederholt, solange die Voraussetzung unverändert fehlt.
 Die Tests ohne Docker werden ausdrücklich ausgewählt; das ist kein vollständiger
@@ -82,10 +82,11 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
 
 - [ ] **N8 – Aufgabe 05: Anwendungsstart und echte Verbindungen prüfen.**
   `mvn -pl batch-writer test '-Dtest=ApplicationConfigurationTest,BatchWriterApplicationTest'`.
-  Fünf Konfigurationsprüfungen sind nach Aufgabe 10 erfolgreich. Die vier Methoden des erweiterten
+  Sechs Konfigurationsprüfungen sind nach Aufgabe 12 erfolgreich. Die vier Methoden des erweiterten
   Anwendungsstarttests werden wegen fehlender Docker-Umgebung nicht erreicht.
   Erwartung: Spring-Kontext ohne Webserver, echte JDBC-Abfrage ohne Schema-Erstellung,
-  erfolgreiche AMQP-Verbindung und keine registrierten Consumer. Die Tests verwenden
+  erfolgreiche AMQP-Verbindung und ab Aufgabe 12 genau ein registrierter und am Broker
+  aktiver Consumer. Die frühere Erwartung ohne Consumer ist damit bewusst ersetzt. Die Tests verwenden
   eigene Container-Zugangsdaten statt lokaler `.env`-Werte.
 
 - [ ] **N9 – Aufgabe 06: RabbitMQ-Topologie am echten Broker prüfen.**
@@ -121,8 +122,19 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   Die fünf ausgewählten Testklassen ohne Docker sind nach Aufgabe 11 mit
   insgesamt 68 Prüfungen erfolgreich; dies ersetzt keinen Integrationstest.
 
+- [ ] **N13 – Aufgabe 12: Empfang, Commit und manuelle Bestätigung am echten Stack.**
+  `mvn -pl batch-writer test '-Dtest=MessageConsumerIntegrationTest,BatchWriterApplicationTest'`.
+  Noch nicht ausgeführt – Docker/RabbitMQ/PostgreSQL fehlt. Zwei neue Prüfungen:
+  Einzellieferung ohne Folgeeingang und 500 vor dem Consumer-Start wartende Nachrichten.
+  Nach Insert, aber vor Commit müssen die Daten auf einer unabhängigen Verbindung
+  unsichtbar und mindestens die Stapel-Lieferungen am Broker unbestätigt sein.
+  Nach Abschluss: alle erwarteten IDs in PostgreSQL, ready/unacknowledged null,
+  DLQ leer und genau ein Consumer. Der Starttest muss ebenfalls einen aktiven
+  Consumer nachweisen. Die Unit-Tests prüfen zusätzlich den sofortigen 500er-Auslöser;
+  der Integrationstest verlangt keine garantierte Aufteilung in genau einen Stapel.
+
 Nach dem Nachholen die Ergebnisse auch in den Prüfständen der Aufgaben 01,
-03, 04, 05, 06, 09, 10 und 11 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
+03, 04, 05, 06, 09, 10, 11 und 12 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
 
 ## Dateinamen und Testkonventionen
 
@@ -397,8 +409,23 @@ das Abschlusskästchen offen; keine Aussage über einen bereits bestandenen S7-T
 
 - [ ] Abgeschlossen und geprüft
 
+Prüfstand 01.10.2026: Consumer implementiert. Der Ausgangstest scheiterte beim
+Übersetzen an der fehlenden Klasse. Abschliessend 78 Tests ohne Docker erfolgreich:
+neun neue Consumer-Prüfungen, eine neue Konfigurationsprüfung und 68 bisherige Tests.
+Keine Fehler oder übersprungenen Tests innerhalb der Auswahl. Befehl:
+`mvn -pl batch-writer test '-Dtest=MessageConsumerTest,ApplicationConfigurationTest,BatchWriteServiceTest,DatabaseAttemptTimeoutTest,MessageDecoderTest,BatchRuleTest'`.
+Listener und Zeitgeber serialisieren Aufnahme, Schreiben und Bestätigen durch
+dieselbe Sperre; beim Sammeln kehrt der Listener sofort zurück. MANUAL, Prefetch 500
+und genau ein Consumer stehen in der produktiven YAML. Die Queue-Deklarationen
+in `RabbitConfig.java` benötigen keine Änderung. Zusätzlich zum geplanten
+Integrationstest ist `test/messaging/MessageConsumerTest.java` angelegt; der
+Konfigurationstest und der Starttest sind an den nun vorhandenen Consumer angepasst.
+`BatchWriteService.instanceId()` verbindet dessen Logs mit den Empfangslogs.
+Die beiden neuen Integrationstests sind kompiliert, aber noch nicht ausgeführt (N13).
+Der vollständige Kanal-/Stop-Nachweis bleibt Aufgabe 14; S3–S7 sind nicht abgenommen.
+
 1. **Ziel:** Erster vollständiger Weg von `chat.persist` bis Commit und ACK.
-2. **Warum kommt dieser Schritt jetzt?** Decoder, Batch-Regeln, Transaktion und Wiederholung sind einzeln geprüft. Der Consumer kann sofort sichere Bestätigungsregeln verwenden.
+2. **Warum kommt dieser Schritt jetzt?** Decoder, Batch-Regeln und Wiederholungsablauf sind ohne Docker geprüft; echte Transaktions- und Zeitnachweise bleiben N10–N12. Der Consumer verbindet diese vorhandenen Bausteine mit manuellen Bestätigungsregeln.
 3. **Welche Dateien werden verändert?** Neu `main/messaging/MessageConsumer.java`, `test/messaging/MessageConsumerIntegrationTest.java`; `main/config/RabbitConfig.java`, `resources/application.yml`; vorhandene Puffer-/Schreibklassen nur für die Verbindung ihrer Verantwortlichkeiten.
 4. **Welcher Test wird zuerst geschrieben oder ausgeführt?** `mvn -pl batch-writer test -Dtest=MessageConsumerIntegrationTest`: echte Queue und DB; eine Nachricht ohne Folgelieferung sowie ein voller Stapel; vor Commit noch unbestätigt, nach Commit gespeichert und Queue leer.
 5. **Was erwarten wir vor der Implementierung?** Nachrichten bleiben im Broker liegen; bisher gibt es keinen produktiven Consumer.

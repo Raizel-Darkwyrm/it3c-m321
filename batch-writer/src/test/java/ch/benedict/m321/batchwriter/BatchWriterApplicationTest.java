@@ -18,14 +18,16 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.Collection;
+import java.time.Duration;
 
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Prüft den Anwendungsstart mit echten Verbindungen vor Einführung des Schreibwegs.
+ * Prüft den Anwendungsstart mit echten Verbindungen und genau einem Queue-Consumer.
  * Die Testcontainer ersetzen lokale Zugangsdaten und benötigen keine Projektvolumes.
  */
 @SpringBootTest(classes = BatchWriterApplication.class)
@@ -96,14 +98,21 @@ class BatchWriterApplicationTest {
         assertEquals(0, tableCount);
     }
 
-    /** Die Anmeldung am Broker funktioniert bereits, ohne Nachrichten zu konsumieren. */
+    /** Die Anmeldung startet ab Aufgabe 12 genau einen Consumer auf der Eingangsqueue. */
     @Test
-    void connectsToRabbitMqWithoutConsumers() {
+    void connectsToRabbitMqWithOneConsumer() {
         try (Connection connection = connectionFactory.createConnection()) {
             assertTrue(connection.isOpen());
         }
         Collection<MessageListenerContainer> consumers = listenerRegistry.getListenerContainers();
         int consumerCount = consumers.size();
-        assertEquals(0, consumerCount);
+        assertEquals(1, consumerCount);
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            try (Connection connection = connectionFactory.createConnection();
+                 com.rabbitmq.client.Channel channel = connection.createChannel(false)) {
+                long activeConsumers = channel.consumerCount("chat.persist");
+                assertEquals(1, activeConsumers);
+            }
+        });
     }
 }

@@ -33,3 +33,11 @@ spring:
     virtual-host: /
     username: ${RABBITMQ_USER}
     password: ${RABBITMQ_PASSWORD}
+    listener:
+      type: simple
+      simple:
+        # Offene Lieferungen bleiben bis zur ausdrücklichen Bestätigung beim Broker.
+        acknowledge-mode: manual
+        prefetch: 500
+        concurrency: 1
+        max-concurrency: 1

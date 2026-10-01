@@ -19,6 +19,11 @@ public class BatchWriteService {
     private final BatchPersistenceService persistenceService;
     private final UUID instanceId = UUID.randomUUID();
 
+    /** Dieselbe Kennung verbindet Empfangs- und Schreiblogs dieser Writer-Instanz. */
+    public UUID instanceId() {
+        return instanceId;
+    }
+
     /** Liefert Commit-Erfolg oder drei Fehlversuche; Unterbrechungen bleiben getrennt erkennbar. */
     public synchronized boolean write(List<ChatMessage> messages) throws InterruptedException {
         List<ChatMessage> batch = List.copyOf(messages);

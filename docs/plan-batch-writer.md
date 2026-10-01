@@ -18,6 +18,60 @@ Als Vorbild dient [plan-chat-service.md](plan-chat-service.md): kleine Aufgaben,
 - Zwischenstände sind noch kein abnahmefähiger Gesamtstack. Bis Aufgabe 12 gibt es bewusst keinen laufenden produktiven Queue-Consumer. Bis Aufgabe 18 gibt es keinen Writer-Container im Compose-Stack.
 - Tests verwenden eigene RabbitMQ-/PostgreSQL-Testcontainer. Diese dürfen für unabhängige Tests isoliert werden. Der abschliessende Compose-Durchlauf S2–S8 verwendet dagegen denselben Stack ohne Aufräumen und übernimmt die zwei Instanzen aus S6 nach S7.
 
+## Offene Prüfungen zum Nachholen
+
+Stand 01.10.2026: **BLOCKIERT – Docker-/Compose-Umgebung fehlt.**
+Diese Liste betrifft bereits bearbeitete Aufgaben; Tests späterer Aufgaben
+sind weiterhin dort geplant. Kein Test wird wegen dieser Markierung deaktiviert.
+Erst nach erfolgreicher Ausführung mit Datum und Ergebnis abhaken.
+
+Voraussetzungen: `docker version` muss Client und Server erreichen;
+`docker compose version` muss funktionieren. Maven benötigt Java 21.
+Alle Befehle beginnen in der Projektwurzel. Compose-Prüfungen mit der
+Beispielvorlage in einem frischen Testklon mit leerem Testvolume ausführen;
+kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschreiben.
+
+- [ ] **N1 – Aufgabe 01: Root-Testlauf wiederholen.** `mvn clean test`.
+  Bisher wegen fehlender Docker-Umgebung fehlgeschlagen, insbesondere die
+  chat-service-Klassen `RabbitConfigIntegrationTest`,
+  `MessagePublisherIntegrationTest` und `MessageControllerIntegrationTest`.
+  Erwartung: alle bis dahin vorhandenen Modul- und Integrationstests erfolgreich,
+  keine wegen fehlender Infrastruktur übersprungenen Tests. Der mittlerweile
+  hinzugekommene Schematest muss ebenfalls erfolgreich sein.
+- [ ] **N2 – Aufgabe 01: chat-service-Image bauen.**
+  `docker compose --env-file .env.example build chat-service`.
+  Bisher nicht ausführbar, weil der Docker-Befehl fehlt.
+  Erwartung: erfolgreicher Build trotz zusätzlichem Maven-Modul.
+- [ ] **N3 – Aufgabe 03: Schema gegen PostgreSQL 16 prüfen.**
+  `mvn -pl batch-writer test '-Dtest=SchemaIntegrationTest'`.
+  Bisher Setup-Fehler beim Containerstart; die fünf Prüfmethoden wurden nicht erreicht.
+  Erwartung: alle fünf erfolgreich (Spalten/Typen/NOT NULL, keine Raumtabelle/FKs,
+  Primary Key, B-Tree-Index, gültige Inserts und Ablehnung doppelter IDs).
+- [ ] **N4 – Aufgabe 03: gesamten Writer-Testlauf wiederholen.**
+  `mvn -pl batch-writer clean test`.
+  Zuletzt 36 erfolgreiche Prüfungen und ein Setup-Fehler im Schematest.
+  Erwartung: gesamter Lauf erfolgreich, einschliesslich der Schema-Prüfmethoden.
+- [ ] **N5 – Aufgabe 04: Compose-Modell validieren.**
+  `docker compose --env-file .env.example config --format json`.
+  Bisher nicht ausführbar. Prüfen: `postgres:16`, drei gesetzte Postgres-Variablen,
+  `chat-net`, `postgres-data`, schreibgeschützter SQL-Mount, TCP-Healthcheck und
+  keine veröffentlichten Host-Ports.
+- [ ] **N6 – Aufgabe 04: Erststart und Schema prüfen.**
+  `docker compose --env-file .env.example up -d postgres`, danach
+  `docker compose --env-file .env.example ps postgres`.
+  Bisher nicht ausgeführt. Erwartung: gesund; anschliessend mit
+  `docker compose --env-file .env.example exec postgres psql -U chat -d chat -c '\d public.message'`
+  genau die sechs Spalten, den Primary Key und `message_room_sent_at_idx` prüfen.
+  Die angegebenen Zugangsdaten gelten für die unveränderte Beispielvorlage.
+- [ ] **N7 – Aufgabe 04: Datenerhalt beim Neustart prüfen.**
+  Im isolierten Teststack eine Zeile mit bekannter neuer ID und vollständigen
+  Werten einfügen, danach `docker compose --env-file .env.example restart postgres`.
+  Nach erneuter Bereitschaft per SELECT anhand dieser ID prüfen: exakt eine
+  Zeile mit unveränderten Werten. Bisher nicht ausgeführt.
+
+Nach dem Nachholen die Ergebnisse auch in den Prüfständen der Aufgaben 01,
+03 und 04 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
+
 ## Dateinamen und Testkonventionen
 
 Zur Lesbarkeit stehen in den Aufgaben folgende Pfadkürzel:

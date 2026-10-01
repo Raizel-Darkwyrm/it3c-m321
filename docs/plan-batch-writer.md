@@ -49,8 +49,9 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   Primary Key, B-Tree-Index, gültige Inserts und Ablehnung doppelter IDs).
 - [ ] **N4 – Aufgabe 03: gesamten Writer-Testlauf wiederholen.**
   `mvn -pl batch-writer clean test`.
-  Zuletzt 36 erfolgreiche Prüfungen und ein Setup-Fehler im Schematest.
-  Erwartung: gesamter Lauf erfolgreich, einschliesslich der Schema-Prüfmethoden.
+  Nach Aufgabe 05: 38 erfolgreiche Prüfungen und zwei Setup-Fehler
+  (`SchemaIntegrationTest` und `BatchWriterApplicationTest`) wegen fehlendem Docker.
+  Erwartung: gesamter Lauf erfolgreich, einschliesslich Schema und Verbindungen.
 - [ ] **N5 – Aufgabe 04: Compose-Modell validieren.**
   `docker compose --env-file .env.example config --format json`.
   Bisher nicht ausführbar. Prüfen: `postgres:16`, drei gesetzte Postgres-Variablen,
@@ -69,8 +70,16 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   Nach erneuter Bereitschaft per SELECT anhand dieser ID prüfen: exakt eine
   Zeile mit unveränderten Werten. Bisher nicht ausgeführt.
 
+- [ ] **N8 – Aufgabe 05: Anwendungsstart und echte Verbindungen prüfen.**
+  `mvn -pl batch-writer test '-Dtest=ApplicationConfigurationTest,BatchWriterApplicationTest'`.
+  Vier Konfigurationsprüfungen sind erfolgreich. Die vier Methoden des erweiterten
+  Anwendungsstarttests werden wegen fehlender Docker-Umgebung nicht erreicht.
+  Erwartung: Spring-Kontext ohne Webserver, echte JDBC-Abfrage ohne Schema-Erstellung,
+  erfolgreiche AMQP-Verbindung und keine registrierten Consumer. Die Tests verwenden
+  eigene Container-Zugangsdaten statt lokaler `.env`-Werte.
+
 Nach dem Nachholen die Ergebnisse auch in den Prüfständen der Aufgaben 01,
-03 und 04 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
+03, 04 und 05 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
 
 ## Dateinamen und Testkonventionen
 
@@ -173,6 +182,15 @@ ignoriert und nicht getrackt. Das Abschlusskästchen bleibt offen.
 ## Aufgabe 05: Anwendungskonfiguration für Datenbank und Broker
 
 - [ ] Abgeschlossen und geprüft
+
+Prüfstand 01.10.2026: JDBC-/AMQP-Abhängigkeiten, Anwendungskonfiguration und Tests
+implementiert. Der Ausgangstest scheiterte an der fehlenden `application.yml`.
+Nach Umsetzung sind alle vier Konfigurationsprüfungen erfolgreich. Der vollständige
+Writer-Lauf meldet 38 erfolgreiche Prüfungen und zwei Docker-Setup-Fehler, keine
+übersprungenen Tests. Die bisherigen zwei Kontextprüfungen benötigen durch die
+geplante Erweiterung jetzt ebenfalls Testcontainer; zusammen mit den zwei neuen
+Verbindungsprüfungen konnten sie noch nicht ausgeführt werden. Nachholen unter N8;
+das Abschlusskästchen bleibt offen. Noch keine Topologie, Consumer oder DB-Retries.
 
 1. **Ziel:** Der Writer kann mit den spezifizierten Variablen auf echte Infrastruktur zugreifen.
 2. **Warum kommt dieser Schritt jetzt?** Schema und externe Konfiguration sind festgelegt; nun wird die Java-Anwendung daran angebunden.

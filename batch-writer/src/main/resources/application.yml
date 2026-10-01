@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: batch-writer
+  main:
+    # Der Writer bietet keine HTTP-Schnittstelle an.
+    web-application-type: none
+  datasource:
+    # Compose setzt den internen Host; Zugangsdaten kommen aus der Umgebung.
+    url: jdbc:postgresql://${POSTGRES_HOST}:5432/${POSTGRES_DB}
+    username: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+  sql:
+    init:
+      # Das Schema gehört dem PostgreSQL-Init-Skript, nicht den Writer-Instanzen.
+      mode: never
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: 5672
+    virtual-host: /
+    username: ${RABBITMQ_USER}
+    password: ${RABBITMQ_PASSWORD}

@@ -49,9 +49,10 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   Primary Key, B-Tree-Index, gültige Inserts und Ablehnung doppelter IDs).
 - [ ] **N4 – Aufgabe 03: gesamten Writer-Testlauf wiederholen.**
   `mvn -pl batch-writer clean test`.
-  Nach Aufgabe 05: 38 erfolgreiche Prüfungen und zwei Setup-Fehler
-  (`SchemaIntegrationTest` und `BatchWriterApplicationTest`) wegen fehlendem Docker.
-  Erwartung: gesamter Lauf erfolgreich, einschliesslich Schema und Verbindungen.
+  Nach Aufgabe 06: 38 erfolgreiche Prüfungen und fünf Docker-Setup-Fehler:
+  je einer in `SchemaIntegrationTest` und `BatchWriterApplicationTest` sowie drei
+  in `RabbitConfigIntegrationTest`. Erwartung: gesamter Lauf erfolgreich,
+  einschliesslich Schema, Verbindungen und Queue-Deklaration.
 - [ ] **N5 – Aufgabe 04: Compose-Modell validieren.**
   `docker compose --env-file .env.example config --format json`.
   Bisher nicht ausführbar. Prüfen: `postgres:16`, drei gesetzte Postgres-Variablen,
@@ -78,8 +79,15 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   erfolgreiche AMQP-Verbindung und keine registrierten Consumer. Die Tests verwenden
   eigene Container-Zugangsdaten statt lokaler `.env`-Werte.
 
+- [ ] **N9 – Aufgabe 06: RabbitMQ-Topologie am echten Broker prüfen.**
+  `mvn -pl batch-writer test '-Dtest=RabbitConfigIntegrationTest'`.
+  Drei Prüfungen wegen fehlendem Docker bereits beim Containerstart blockiert.
+  Erwartung: beide Queues direkt nach Kontextstart vorhanden, wiederholte
+  Deklaration mit den Producer-Eigenschaften erfolgreich, widersprüchliche
+  Eigenschaften abgelehnt und vorhandene Queue erhalten. Keine Consumer.
+
 Nach dem Nachholen die Ergebnisse auch in den Prüfständen der Aufgaben 01,
-03, 04 und 05 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
+03, 04, 05 und 06 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
 
 ## Dateinamen und Testkonventionen
 
@@ -205,6 +213,15 @@ das Abschlusskästchen bleibt offen. Noch keine Topologie, Consumer oder DB-Retr
 ## Aufgabe 06: RabbitMQ-Topologie kompatibel deklarieren
 
 - [ ] Abgeschlossen und geprüft
+
+Prüfstand 01.10.2026: Queue-Namen, Queue-Beans und explizite RabbitAdmin-Initialisierung
+beim Start implementiert. Der Test wurde zuerst geschrieben; nach Korrektur eines
+Test-Rückgabetyps scheiterte er erwartungsgemäss nur an der fehlenden RabbitConfig.
+Der anschliessende vollständige Writer-Lauf kompiliert erfolgreich: 38 Prüfungen
+grün, fünf Docker-Setup-Fehler, keine übersprungenen Tests. Die drei neuen
+Broker-Prüfungen konnten noch nicht ausgeführt werden; Nachholmarkierung N9.
+Die Eigenschaften wurden mit dem vorhandenen chat-service-Quelltext verglichen.
+Das Abschlusskästchen bleibt bis zum erfolgreichen Broker-Test offen.
 
 1. **Ziel:** `chat.persist` und `chat.dlq` unabhängig vom ersten HTTP-Aufruf bereitstellen.
 2. **Warum kommt dieser Schritt jetzt?** Der Verbindungsaufbau ist geprüft; Topologiefehler werden vor Einführung des Consumers isoliert sichtbar.

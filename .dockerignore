@@ -1,0 +1,9 @@
+# Lokale Zugangsdaten und persönliche Erklärungen gehören nicht in den Build-Kontext.
+.env
+.env.*
+!.env.example
+Erklärungen/
+
+# Versionshistorie und lokal gebaute Artefakte werden im Image-Build nicht benötigt.
+.git/
+**/target/

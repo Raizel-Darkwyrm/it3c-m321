@@ -26,9 +26,10 @@ Diese Liste betrifft bereits bearbeitete Aufgaben; Tests späterer Aufgaben
 sind weiterhin dort geplant. Kein Test wird wegen dieser Markierung deaktiviert.
 Erst nach erfolgreicher Ausführung mit Datum und Ergebnis abhaken.
 
-Aktueller Stand nach Sichtprüfung von Aufgabe 16: Alle Testläufe sind auf Benutzerwunsch bis zum
+Aktueller Stand nach Aufgaben 17/18: Alle Testläufe sind auf Benutzerwunsch bis zum
 gesammelten Testabschnitt zurückgestellt. N1–N14 waren bereits wegen fehlendem
-Docker/Compose offen; N15 und N16 enthalten zusätzlich noch zu erstellende Tests.
+Docker/Compose offen; N15–N17 enthalten zusätzlich noch zu erstellende Tests,
+N18 die noch nicht ausgeführten Containerprüfungen.
 Aufgabe 15 wurde beim ausdrücklichen Weitergehen zu Aufgabe 16 nicht bearbeitet
 und bleibt ebenfalls offen. Frühere Fehlversuche unten bleiben als Historie
 erhalten und werden nicht wiederholt, solange die Voraussetzung unverändert fehlt.
@@ -183,8 +184,27 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   Die spätere Zwei-Container-Prüfung bleibt Aufgabe 18/21. Vor der gemeinsamen
   Abnahme auch Aufgabe 15 und die offenen Lebenszyklusnachweise aus N15 nachholen.
 
+- [ ] **N17 – Aufgabe 17: Datenbankausfall mit zwei Writern.** Testdatei noch
+  erstellen; vollständiger Nachholauftrag im Statusabschnitt von Aufgabe 17.
+  Keine Ausführung erfolgt, insbesondere kein Nachweis der 90-Sekunden-Frist.
+- [ ] **N18 – Aufgabe 18: Images, Frischstart, Skalierung und Datenerhalt.**
+  Auf Benutzerwunsch noch nicht ausgeführt; Docker ist weiterhin nicht verfügbar.
+  Im frischen Testklon mit Beispielkonfiguration zunächst
+  `docker compose --env-file .env.example config --format json`, dann
+  `docker compose --env-file .env.example build chat-service batch-writer` und
+  `docker compose --env-file .env.example up -d` ausführen. Vier Dienste,
+  Schema, interne Hosts, keine Port-Mappings und beide Datenvolumes prüfen.
+  Anschliessend `docker compose --env-file .env.example up -d --scale batch-writer=2`:
+  zwei Writer und über `docker compose --env-file .env.example exec rabbitmq rabbitmqctl list_queues name consumers messages_ready messages_unacknowledged`
+  genau zwei Consumer auf `chat.persist` nachweisen. Gezielte Nachrichten
+  vollständig speichern lassen. Im isolierten Teststack Daten-/Queue-Erhalt
+  bei normalem Neustart und Container-Ersatz ohne Volume-Löschung prüfen.
+  Das Stop-Verhalten einschliesslich `stop_grace_period: 30s` mit N15 messen.
+  Vor Abnahme auch Maven-Tests nachholen; `-DskipTests` im Dockerfile ist kein
+  Testnachweis. Keine bestehenden Benutzer-Volumes löschen oder `.env` überschreiben.
+
 Nach dem Nachholen die Ergebnisse auch in den Prüfständen der Aufgaben 01,
-03, 04, 05, 06, 09, 10, 11, 12, 13, 14 und 16 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
+03, 04, 05, 06, 09, 10, 11, 12, 13, 14, 16, 17 und 18 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
 
 ## Dateinamen und Testkonventionen
 
@@ -613,11 +633,23 @@ Dokumentations-Commit: `docs: Datenbankausfalltest zum Nachholen festhalten`.
 
 - [ ] Abgeschlossen und geprüft
 
-1. **Ziel:** Den geprüften Writer als skalierbaren Container im Gesamtstack starten.
-2. **Warum kommt dieser Schritt jetzt?** Fehler im Java-Kern sind weitgehend isoliert geprüft; jetzt werden Verpackung und Containerkonfiguration geprüft.
+Implementierungsstand 01.10.2026: Mehrstufiges Writer-Dockerfile und Compose-Dienst
+ergänzt. Beide Modul-POMs stehen dem Build zur Verfügung; nur Writer-Quellen
+werden für das neue Image kopiert. Interne Hosts, bestehende Zugangsdaten,
+gesunde Startabhängigkeiten, `chat-net`, kein Host-Port und kein fester
+Containername. RabbitMQ erhält `rabbitmq-data` und einen stabilen Hostnamen.
+Der Writer erhält 30 Sekunden Container-Stop-Frist für Schonfrist und Abbau.
+Zusätzlich `.dockerignore` angelegt: lokale Secrets, private Erklärungen,
+Git-Historie und target-Verzeichnisse bleiben ausserhalb des Build-Kontexts.
+`chat-service/Dockerfile` benötigt keine Änderung; `.env.example` enthält bereits
+alle erforderlichen Variablen. Keine Builds, Compose-Aufrufe oder Tests ausgeführt.
+Nur Diff-/Quelltext-Sichtprüfung; N18 bleibt offen und kein S2-/S6-Erfolg behauptet.
+
+1. **Ziel:** Den Writer als skalierbaren Container im Gesamtstack bereitstellen und später prüfen.
+2. **Warum kommt dieser Schritt jetzt?** Der Java-Kern ist implementiert; die zurückgestellten Nachweise bleiben offen. Jetzt folgt die Verpackung und Containerkonfiguration, deren Prüfung ebenfalls nachgeholt wird.
 3. **Welche Dateien werden verändert?** Neu `batch-writer/Dockerfile`; `docker-compose.yml`; `chat-service/Dockerfile` nur falls der gemeinsame Buildkontext noch angepasst werden muss. `.env.example` bleibt bei den bereits eingeführten Variablen.
 4. **Welcher Test wird zuerst geschrieben oder ausgeführt?** `docker compose config --format json`, danach `docker compose build batch-writer`. Vorher fehlen Writer-Dienst und Dockerfile. Nach Umsetzung Prüfungen aus Spezifikation 19.3 und 19.7 ausführen.
-5. **Was erwarten wir vor der Implementierung?** Java-Tests grün, aber das Containerziel `batch-writer` existiert noch nicht.
+5. **Was erwarten wir vor der Implementierung?** Das Containerziel `batch-writer` fehlt; Tests für den aktuellen Java-Stand sind zurückgestellt.
 6. **Was implementieren wir?** Mehrstufiges Dockerfile, Writer-Service mit internen Hosts und Zugangsdaten, Abhängigkeit von gesunden Diensten, kein Host-Port und kein fester Containername. RabbitMQ erhält `rabbitmq-data`. Build-Tests nicht im Docker-Build ausführen, sondern vorher mit Maven; keine `.env` ins Image kopieren.
 7. **Was erwarten wir danach?** Frischer Stack mit vier Diensten, Schema vorhanden, alle ohne Port-Mappings; `--scale batch-writer=2` ergibt zwei Consumer. Volumes bleiben bei normalem Neustart erhalten. Start auf bestehenden Testvolumes ersetzt nicht den Frischstartnachweis.
 8. **Welches Bewertungsszenario wird vorbereitet oder erfüllt?** S2 sowie Containeranteil von S6 lokal geprüft; kompletter Ablauf noch offen.

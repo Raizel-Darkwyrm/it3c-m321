@@ -1,5 +1,4 @@
-# Bewertung 1: Broker, chat-service und die Datenbank für den Schreibweg.
-# Der batch-writer wird in einem späteren Schritt als Dienst ergänzt.
+# Bewertung 1: Producer, Broker, Datenbank und skalierbarer batch-writer.
 services:
 
   postgres:
@@ -24,9 +23,13 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.13-management
+    # RabbitMQ verwendet den Hostnamen für seine Knoten- und Datenverzeichniskennung.
+    hostname: rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
     networks:
       - chat-net
     healthcheck:
@@ -49,6 +52,29 @@ services:
     networks:
       - chat-net
 
+  batch-writer:
+    build:
+      context: .
+      dockerfile: batch-writer/Dockerfile
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - chat-net
+    # Zeit für die fünfsekündige Schonfrist und den anschliessenden Verbindungsabbau.
+    stop_grace_period: 30s
+    # Kein fester Containername: --scale batch-writer=2 erzeugt unabhängige Instanzen.
+
 # KEIN ports:-Eintrag in dieser Datei. Der einzige offene Port des
 # Gesamtsystems gehört später dem web-gateway.
 networks:
@@ -57,4 +83,5 @@ networks:
 
 # Die Daten überleben einen normalen Neustart oder Ersatz des Containers.
 volumes:
-  postgres-data:
+    postgres-data:
+    rabbitmq-data:

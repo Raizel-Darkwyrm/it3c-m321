@@ -49,7 +49,7 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   Primary Key, B-Tree-Index, gültige Inserts und Ablehnung doppelter IDs).
 - [ ] **N4 – Aufgabe 03: gesamten Writer-Testlauf wiederholen.**
   `mvn -pl batch-writer clean test`.
-  Nach Aufgabe 06: 38 erfolgreiche Prüfungen und fünf Docker-Setup-Fehler:
+  Nach Aufgabe 07: 46 erfolgreiche Prüfungen und fünf Docker-Setup-Fehler:
   je einer in `SchemaIntegrationTest` und `BatchWriterApplicationTest` sowie drei
   in `RabbitConfigIntegrationTest`. Erwartung: gesamter Lauf erfolgreich,
   einschliesslich Schema, Verbindungen und Queue-Deklaration.
@@ -235,7 +235,16 @@ Das Abschlusskästchen bleibt bis zum erfolgreichen Broker-Test offen.
 
 ## Aufgabe 07: Batch-Puffer und Grössengrenze
 
-- [ ] Abgeschlossen und geprüft
+- [x] Abgeschlossen und geprüft
+
+Prüfstand 01.10.2026: PendingMessage und MessageBatch implementiert. Der zuerst
+geschriebene Test scheiterte an den fehlenden Klassen; danach acht BatchRuleTest-
+Prüfungen erfolgreich. Bei 500 Einträgen wird eine unveränderliche Kopie übergeben;
+verschiedene Empfangskanäle werden innerhalb eines Stapels abgelehnt. Duplikat-
+Lieferungen bleiben erhalten. Kein Insert, ACK oder Timeout. Der vollständige
+Writer-Lauf hat 46 erfolgreiche Prüfungen und unverändert fünf Docker-Setup-Fehler,
+keine übersprungenen Tests. Die offenen Infrastrukturprüfungen bleiben unter N1–N9
+verzeichnet; für Aufgabe 07 ist kein zusätzlicher Nachholtest blockiert.
 
 1. **Ziel:** Gültige Nachrichten mit ihren Lieferungsinformationen bis maximal 500 sammeln.
 2. **Warum kommt dieser Schritt jetzt?** Die Sammellogik lässt sich ohne Datenbank und laufenden Consumer eindeutig prüfen.

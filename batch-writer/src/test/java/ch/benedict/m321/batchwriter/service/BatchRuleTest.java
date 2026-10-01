@@ -1,0 +1,161 @@
+package ch.benedict.m321.batchwriter.service;
+
+import ch.benedict.m321.batchwriter.dto.ChatMessage;
+import ch.benedict.m321.batchwriter.messaging.PendingMessage;
+import com.rabbitmq.client.Channel;
+import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+
+/** Prüft die Stapelgrenze ohne Broker, Datenbank oder zeitabhängige Wartezeiten. */
+class BatchRuleTest {
+
+    private final Channel channel = mock(Channel.class);
+    private final MessageBatch batch = new MessageBatch();
+
+    /** Weniger als 500 Lieferungen dürfen keinen grössenbedingten Schreibauftrag auslösen. */
+    @Test
+    void collects499MessagesWithoutReleasingBatch() {
+        assertEquals(0, batch.size());
+        for (int i = 1; i <= 499; i++) {
+            PendingMessage pending = message(channel, i);
+            List<PendingMessage> ready = batch.add(pending);
+            assertTrue(ready.isEmpty());
+        }
+        assertEquals(499, batch.size());
+        verifyNoInteractions(channel);
+    }
+
+    /** Der 500. Eintrag liefert genau einen vollständigen Stapel in Empfangsreihenfolge. */
+    @Test
+    void releasesExactly500Messages() {
+        List<PendingMessage> ready = fillBatch();
+        assertEquals(500, ready.size());
+        for (int i = 0; i < ready.size(); i++) {
+            PendingMessage pending = ready.get(i);
+            assertEquals(i + 1, pending.deliveryTag());
+            assertSame(channel, pending.channel());
+        }
+        assertEquals(0, batch.size());
+        verifyNoInteractions(channel);
+    }
+
+    /** Ein übergebener Stapel darf weder vom Empfänger noch durch weitere Eingänge wachsen. */
+    @Test
+    void keepsReleasedBatchUnchanged() {
+        List<PendingMessage> ready = fillBatch();
+        PendingMessage next = message(channel, 501);
+        assertThrows(UnsupportedOperationException.class, () -> ready.add(next));
+        List<PendingMessage> nextResult = batch.add(next);
+        assertTrue(nextResult.isEmpty());
+        assertEquals(1, batch.size());
+        assertEquals(500, ready.size());
+    }
+
+    /** Wiederholte Grössenauslösung trennt Stapel, ohne Einträge doppelt zu übergeben. */
+    @Test
+    void splits1000DeliveriesIntoTwoBatches() {
+        int releasedCount = 0;
+        int deliveredCount = 0;
+        for (int i = 1; i <= 1000; i++) {
+            PendingMessage pending = message(channel, i);
+            List<PendingMessage> ready = batch.add(pending);
+            if (!ready.isEmpty()) {
+                releasedCount++;
+                deliveredCount += ready.size();
+                PendingMessage last = ready.getLast();
+                assertEquals(i, last.deliveryTag());
+            }
+        }
+        assertEquals(2, releasedCount);
+        assertEquals(1000, deliveredCount);
+        assertEquals(0, batch.size());
+    }
+
+    /** Ein fremder Kanal wird abgelehnt, ohne den bereits gesammelten Eintrag zu verlieren. */
+    @Test
+    void rejectsMixedChannels() {
+        PendingMessage first = message(channel, 1);
+        batch.add(first);
+        Channel otherChannel = mock(Channel.class);
+        PendingMessage other = message(otherChannel, 1);
+        assertThrows(IllegalArgumentException.class, () -> batch.add(other));
+        assertEquals(1, batch.size());
+        List<PendingMessage> ready = List.of();
+        for (int i = 2; i <= 500; i++) {
+            PendingMessage pending = message(channel, i);
+            ready = batch.add(pending);
+        }
+        assertSame(first, ready.getFirst());
+        assertEquals(500, ready.size());
+        verifyNoInteractions(channel, otherChannel);
+    }
+
+    /** Ein neuer Stapel darf nach abgeschlossener Übergabe einem anderen Kanal gehören. */
+    @Test
+    void acceptsNewChannelAfterRelease() {
+        fillBatch();
+        Channel otherChannel = mock(Channel.class);
+        PendingMessage pending = message(otherChannel, 1);
+        List<PendingMessage> ready = batch.add(pending);
+        assertTrue(ready.isEmpty());
+        assertEquals(1, batch.size());
+    }
+
+    /** Dieselbe Nachrichten-ID kann mehrere separat zu bestätigende Lieferungen haben. */
+    @Test
+    void retainsDuplicateMessageDeliveries() {
+        PendingMessage first = message(channel, 1);
+        ChatMessage content = first.message();
+        PendingMessage duplicate = new PendingMessage(content, channel, 2);
+        batch.add(first);
+        batch.add(duplicate);
+        List<PendingMessage> ready = List.of();
+        for (int i = 3; i <= 500; i++) {
+            PendingMessage pending = message(channel, i);
+            ready = batch.add(pending);
+        }
+        assertSame(first, ready.get(0));
+        assertSame(duplicate, ready.get(1));
+    }
+
+    /** Ungültige lokale Lieferungsreferenzen dürfen den Puffer nicht verändern. */
+    @Test
+    void rejectsMissingDeliveryInformation() {
+        PendingMessage valid = message(channel, 1);
+        ChatMessage content = valid.message();
+        assertThrows(NullPointerException.class, () -> new PendingMessage(null, channel, 1));
+        assertThrows(NullPointerException.class, () -> new PendingMessage(content, null, 1));
+        assertThrows(IllegalArgumentException.class, () -> new PendingMessage(content, channel, 0));
+        assertThrows(NullPointerException.class, () -> batch.add(null));
+        assertEquals(0, batch.size());
+    }
+
+    /** Baut einen vollen Stapel, um die Übergabe in mehreren Tests zu prüfen. */
+    private List<PendingMessage> fillBatch() {
+        List<PendingMessage> ready = List.of();
+        for (int i = 1; i <= 500; i++) {
+            PendingMessage pending = message(channel, i);
+            ready = batch.add(pending);
+        }
+        return ready;
+    }
+
+    /** Liefert gültige Beispieldaten; der Delivery-Tag bleibt getrennt von der UUID. */
+    private PendingMessage message(Channel receivingChannel, long deliveryTag) {
+        UUID id = UUID.randomUUID();
+        UUID roomId = UUID.randomUUID();
+        Instant sentAt = Instant.parse("2026-10-01T12:00:00Z");
+        ChatMessage message = new ChatMessage(id, roomId, "anna", "Anna", "Hallo", sentAt);
+        return new PendingMessage(message, receivingChannel, deliveryTag);
+    }
+}

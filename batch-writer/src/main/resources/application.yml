@@ -9,6 +9,20 @@ spring:
     url: jdbc:postgresql://${POSTGRES_HOST}:5432/${POSTGRES_DB}
     username: ${POSTGRES_USER}
     password: ${POSTGRES_PASSWORD}
+    hikari:
+      # Millisekunden: Pool-Warten darf nicht das gesamte Versuchsbudget verbrauchen.
+      connection-timeout: 1000
+      validation-timeout: 500
+      initialization-fail-timeout: -1
+      minimum-idle: 0
+      maximum-pool-size: 2
+      data-source-properties:
+        # pgJDBC verwendet hier Sekunden, PostgreSQL bei den Optionen Millisekunden.
+        connectTimeout: 1
+        loginTimeout: 1
+        socketTimeout: 1
+        cancelSignalTimeout: 1
+        options: "-c statement_timeout=1500 -c lock_timeout=750"
   sql:
     init:
       # Das Schema gehört dem PostgreSQL-Init-Skript, nicht den Writer-Instanzen.

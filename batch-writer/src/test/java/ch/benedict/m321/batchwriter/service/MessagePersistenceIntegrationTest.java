@@ -3,6 +3,7 @@ package ch.benedict.m321.batchwriter.service;
 import ch.benedict.m321.batchwriter.dto.ChatMessage;
 import ch.benedict.m321.batchwriter.repository.MessageRepository;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
@@ -24,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -41,6 +43,15 @@ class MessagePersistenceIntegrationTest {
     private JdbcTemplate jdbcTemplate;
     private DataSourceTransactionManager transactionManager;
     private BatchPersistenceService persistenceService;
+    private ScheduledThreadPoolExecutor timeoutExecutor;
+
+    /** Jeder Test beendet seinen eigenen Zeitgeber, damit keine Hintergrundarbeit zurückbleibt. */
+    @AfterEach
+    void stopTimeoutExecutor() {
+        if (timeoutExecutor != null) {
+            timeoutExecutor.shutdownNow();
+        }
+    }
 
     /** Der Datenbanktest verwendet dieselbe Init-Datei wie Compose, ohne eigene Schemakopie. */
     private static PostgreSQLContainer<?> createPostgres() {
@@ -71,7 +82,9 @@ class MessagePersistenceIntegrationTest {
         jdbcTemplate.execute("TRUNCATE public.message");
         transactionManager = new DataSourceTransactionManager(dataSource);
         MessageRepository repository = new MessageRepository(jdbcTemplate);
-        persistenceService = new BatchPersistenceService(repository, transactionManager);
+        timeoutExecutor = new ScheduledThreadPoolExecutor(1);
+        timeoutExecutor.setRemoveOnCancelPolicy(true);
+        persistenceService = new BatchPersistenceService(repository, transactionManager, dataSource, timeoutExecutor);
     }
 
     /** Alle sechs Werte müssen nach Rückkehr auf einer neuen Verbindung sichtbar sein. */
@@ -160,7 +173,7 @@ class MessagePersistenceIntegrationTest {
     void acceptsEmptyBatch() {
         MessageRepository repository = mock(MessageRepository.class);
         PlatformTransactionManager manager = mock(PlatformTransactionManager.class);
-        BatchPersistenceService service = new BatchPersistenceService(repository, manager);
+        BatchPersistenceService service = new BatchPersistenceService(repository, manager, dataSource, timeoutExecutor);
         List<ChatMessage> empty = List.of();
         service.persist(empty);
         verifyNoInteractions(repository, manager);

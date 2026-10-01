@@ -19,6 +19,19 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /** Prüft die echte YAML-Datei mit kontrollierten Variablen unabhängig von lokaler .env. */
 class ApplicationConfigurationTest {
 
+    /** Pool und Treiber brauchen eigene Grenzen, bevor überhaupt eine SQL-Transaktion läuft. */
+    @Test
+    void limitsConnectionAndSocketWaits() throws IOException {
+        Map<String, Object> variables = testVariables();
+        PropertySourcesPropertyResolver properties = loadProperties(variables);
+        assertEquals("1000", properties.getProperty("spring.datasource.hikari.connection-timeout"));
+        assertEquals("500", properties.getProperty("spring.datasource.hikari.validation-timeout"));
+        assertEquals("-1", properties.getProperty("spring.datasource.hikari.initialization-fail-timeout"));
+        assertEquals("1", properties.getProperty("spring.datasource.hikari.data-source-properties.connectTimeout"));
+        assertEquals("1", properties.getProperty("spring.datasource.hikari.data-source-properties.socketTimeout"));
+        assertEquals("1", properties.getProperty("spring.datasource.hikari.data-source-properties.cancelSignalTimeout"));
+    }
+
     /** Andere Werte als die Compose-Beispiele decken fest eingetragene Zugangsdaten auf. */
     @Test
     void resolvesDatabaseVariables() throws IOException {

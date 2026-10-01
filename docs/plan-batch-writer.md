@@ -9,7 +9,7 @@ Als Vorbild dient [plan-chat-service.md](plan-chat-service.md): kleine Aufgaben,
 - Dieser Plan wird vor Beginn der Implementierung separat gesichert. Vorgeschlagene Commit-Message: `docs: Umsetzungsplan für batch-writer festlegen`. Das Erstellen dieses Dokuments führt selbst keinen Commit aus.
 - Danach Aufgaben 01 bis 21 in der angegebenen Reihenfolge bearbeiten. Die Nummern beziehen sich auf diesen Plan, nicht auf die bisherigen Gesprächsschritte.
 - Pro Aufgabe zuerst den angegebenen Test schreiben oder die Prüfung ausführen. Bei einer neuen Funktion den erwarteten fachlichen Fehlschlag festhalten; ein nicht verfügbares Docker oder ein Downloadfehler ist kein fachlicher Rot-Nachweis.
-- Nach der Umsetzung den gezielten Test und die bis dahin vorhandenen Writer-Tests ausführen. Änderungen am Eltern-POM oder am gemeinsamen Build zusätzlich mit dem Root-Testlauf prüfen. Keine relevanten Tests überspringen, um einen grünen Commit zu erhalten.
+- Nach der Umsetzung die ausführbaren gezielten Tests und bisherigen Writer-Tests ausführen. Benutzerfestlegung ab Aufgabe 10: Bei bekannter fehlender Komponente den betreffenden Test nicht erneut starten, sondern als „noch nicht ausgeführt – Voraussetzung fehlt“ mit Nachholbefehl festhalten. Keine Tests im Quelltext deaktivieren und keinen grünen Gesamtlauf behaupten. Änderungen am Eltern-POM oder gemeinsamen Build erfordern weiterhin den Root-Nachweis, sobald dessen Voraussetzungen vorhanden sind.
 - Jede Aufgabe ergibt einen Commit mit Implementierung und zugehörigen Tests bzw. Prüfdokumentation zum selben Thema. Keine künstlichen leeren Commits. Ein Thema bleibt auch dann eines, wenn Quelltext, Test und Konfiguration dafür gemeinsam geändert werden müssen.
 - Bei reinen Nachweisen kann die Ausgangsprüfung schon grün sein. Dann wird kein Fehlschlag erfunden: der neue Test oder ein ehrliches Prüfprotokoll ist das Ergebnis.
 - Prüfen und committen nur die zur Aufgabe gehörenden Pfade. Kein pauschales `git add .`. `.env` und der private Ordner `Erklärungen` bleiben ausgeschlossen.
@@ -24,6 +24,12 @@ Stand 01.10.2026: **BLOCKIERT – Docker-/Compose-Umgebung fehlt.**
 Diese Liste betrifft bereits bearbeitete Aufgaben; Tests späterer Aufgaben
 sind weiterhin dort geplant. Kein Test wird wegen dieser Markierung deaktiviert.
 Erst nach erfolgreicher Ausführung mit Datum und Ergebnis abhaken.
+
+Aktueller Stand ab Aufgabe 10: N1–N11 **noch nicht ausgeführt für den aktuellen
+Stand – Docker/Compose fehlt**. Frühere Fehlversuche unten bleiben als Historie
+erhalten und werden nicht wiederholt, solange die Voraussetzung unverändert fehlt.
+Die Tests ohne Docker werden ausdrücklich ausgewählt; das ist kein vollständiger
+Root- oder Writer-Testlauf. Es wurden keine Tests per Annotation oder POM deaktiviert.
 
 Voraussetzungen: `docker version` muss Client und Server erreichen;
 `docker compose version` muss funktionieren. Maven benötigt Java 21.
@@ -49,11 +55,13 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   Primary Key, B-Tree-Index, gültige Inserts und Ablehnung doppelter IDs).
 - [ ] **N4 – Aufgabe 03: gesamten Writer-Testlauf wiederholen.**
   `mvn -pl batch-writer clean test`.
-  Nach Aufgabe 09: 52 erfolgreiche Prüfungen und sechs Docker-Setup-Fehler:
+  Historischer Gesamtlauf nach Aufgabe 09: 52 erfolgreiche Prüfungen und sechs Docker-Setup-Fehler:
   je einer in `SchemaIntegrationTest`, `BatchWriterApplicationTest` und
   `MessagePersistenceIntegrationTest` sowie drei in `RabbitConfigIntegrationTest`.
   Erwartung: gesamter Lauf erfolgreich, einschliesslich Schema, Verbindungen,
   Queue-Deklaration und atomarer Persistenz.
+  Nach Aufgabe 10 nicht erneut ausgeführt; stattdessen 57 ausgewählte Prüfungen
+  ohne Docker erfolgreich. Dies ersetzt den vollständigen Nachweis nicht.
 - [ ] **N5 – Aufgabe 04: Compose-Modell validieren.**
   `docker compose --env-file .env.example config --format json`.
   Bisher nicht ausführbar. Prüfen: `postgres:16`, drei gesetzte Postgres-Variablen,
@@ -74,7 +82,7 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
 
 - [ ] **N8 – Aufgabe 05: Anwendungsstart und echte Verbindungen prüfen.**
   `mvn -pl batch-writer test '-Dtest=ApplicationConfigurationTest,BatchWriterApplicationTest'`.
-  Vier Konfigurationsprüfungen sind erfolgreich. Die vier Methoden des erweiterten
+  Fünf Konfigurationsprüfungen sind nach Aufgabe 10 erfolgreich. Die vier Methoden des erweiterten
   Anwendungsstarttests werden wegen fehlender Docker-Umgebung nicht erreicht.
   Erwartung: Spring-Kontext ohne Webserver, echte JDBC-Abfrage ohne Schema-Erstellung,
   erfolgreiche AMQP-Verbindung und keine registrierten Consumer. Die Tests verwenden
@@ -95,8 +103,17 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   innerhalb und nach Stapeln unverändert übersprungen, eigene Commit-Grenze auch
   bei äusserer Transaktion, kein Schreib-/Transaktionsaufruf für leere Stapel.
 
+- [ ] **N11 – Aufgabe 10: Gesamtdauer und tatsächlichen Abbruch messen.**
+  `mvn -pl batch-writer test '-Dtest=DatabaseAttemptTimeoutIntegrationTest,MessagePersistenceIntegrationTest'`.
+  Noch nicht ausgeführt – Docker/PostgreSQL fehlt. Vier neue Zeitprüfungen erwarten
+  höchstens fünf Sekunden ab persist-Aufruf: unerreichbarer Server, gesperrter
+  Insert, blockierender Commit und ausbleibende Antworten einer zuvor benutzten
+  Verbindung. Nach Freigabe müssen neue Schreibversuche ohne Service-Neustart
+  erfolgreich sein; Rollback und ausbleibende Alt-Sperren mitprüfen. Die bestehenden
+  Persistenzprüfungen müssen mit der neuen Abbruchlogik ebenfalls bestehen.
+
 Nach dem Nachholen die Ergebnisse auch in den Prüfständen der Aufgaben 01,
-03, 04, 05, 06 und 09 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
+03, 04, 05, 06, 09 und 10 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
 
 ## Dateinamen und Testkonventionen
 
@@ -312,6 +329,24 @@ keine Wiederholung und noch keine Begrenzung der Versuchsdauer.
 ## Aufgabe 10: Dauer eines Datenbankversuchs begrenzen
 
 - [ ] Abgeschlossen und geprüft
+
+Prüfstand 01.10.2026: Pool-/Treibergrenzen, Transaktions-Timeout und eine
+Abbruchfrist für die aktive Verbindung implementiert. Poolbeschaffung 1000 ms,
+Validierung 500 ms, Treiber-Verbindungs-/Login-/Socket-/Cancel-Grenzen je 1 s,
+serverseitig statement_timeout 1500 ms und lock_timeout 750 ms. Transaktions-Timeout
+2 s; unabhängiger Verbindungsabbruch nach 4 s ab Versuchsbeginn lässt Reserve
+bis zur geforderten 5-s-Grenze. Kein paralleler JDBC-Worker und kein Retry.
+Die Grenze wird damit angestrebt, ist aber erst nach den realen Zeitmessungen belegt.
+57 ausgewählte Tests ohne Docker erfolgreich, darunter fünf Konfigurations- und
+vier Abbruchzustandsprüfungen. Neue und bestehende Integrationstests nur kompiliert,
+nicht gestartet. N11 markiert den offenen Nachweis; das Abschlusskästchen bleibt offen.
+
+Konkretisierung der Dateiliste: Der Abbruchzustand liegt zur Lesbarkeit in
+`main/service/DatabaseAttemptTimeout.java`, seine Tests in
+`test/service/DatabaseAttemptTimeoutTest.java`. Der bestehende Konfigurationstest
+prüft zusätzlich die YAML-Zeitlimits; der Persistenztest erhält den benötigten
+Zeitgeber und beendet ihn nach jedem Fall. Diese Anpassungen gehören ausschliesslich
+zum Versuchsbudget und führen keine Wiederholungslogik aus Aufgabe 11 ein.
 
 1. **Ziel:** Ein Schreibversuch blockiert insgesamt höchstens fünf Sekunden gemäss Spezifikation 10.
 2. **Warum kommt dieser Schritt jetzt?** Ein Retry um unbegrenzt blockierende Datenbankarbeit wäre wirkungslos. Die tatsächliche Schreiboperation existiert jetzt für die Messung.

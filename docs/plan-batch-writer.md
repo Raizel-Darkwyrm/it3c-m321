@@ -584,8 +584,23 @@ Die unten geplante Test-Commit-Message bleibt für den tatsächlichen Testschrit
 
 - [ ] Abgeschlossen und geprüft
 
+Stand 01.10.2026: Auf Benutzerwunsch weiterhin keine Tests erstellen oder ausführen.
+`DatabaseOutageIntegrationTest.java` fehlt noch. Kein Produktionscode geändert.
+Nachholauftrag N17: nach den Nachweisen aus Aufgaben 14–16 zwei Writer mit zuvor
+erfolgreich benutzten DB-Verbindungen weiterlaufen lassen, PostgreSQL stoppen,
+300 gültige IDs während des Ausfalls senden und PostgreSQL unabhängig vom Senden
+nach 15 Sekunden mit unverändertem Volume starten. Binnen 90 Sekunden ab Stop
+muss die Vereinigung der DB-/DLQ-IDs exakt diese 300 IDs enthalten; keine davon
+bleibt ready oder unacknowledged in `chat.persist`. Danach Kontrollnachrichten
+gemäss Spezifikation 19.8: Speicherung binnen zehn Sekunden nach letzter Annahme,
+je Writer ein neuer Commit, nötigenfalls weitere Kontrollgruppen innerhalb von
+insgesamt 30 Sekunden. Keine Writer-Neustarts. DLQ nicht entnehmend prüfen;
+keine automatische Rückführung. Erst nach Erstellung des Tests den unten
+genannten Maven-Befehl ausführen. Kein Build oder Laufzeitnachweis erfolgt.
+Dokumentations-Commit: `docs: Datenbankausfalltest zum Nachholen festhalten`.
+
 1. **Ziel:** S7 mit 15 Sekunden Ausfall, spezifiziertem Fehlerziel und Erholung beider Instanzen nachweisen.
-2. **Warum kommt dieser Schritt jetzt?** Retry, Zeitgrenzen und Mehrinstanzbetrieb sind einzeln abgesichert; nun wird ihre Kombination geprüft.
+2. **Warum kommt dieser Schritt jetzt?** Retry und Zeitgrenzen sind implementiert; ihre echten Nachweise und der Mehrinstanztest bleiben offen. Im späteren Testabschnitt wird danach ihre Kombination geprüft.
 3. **Welche Dateien werden verändert?** Neu `test/service/DatabaseOutageIntegrationTest.java`; nur bei Befunden betroffene Konfigurations-, Schreib- oder Consumer-Dateien korrigieren.
 4. **Welcher Test wird zuerst geschrieben oder ausgeführt?** `mvn -pl batch-writer test -Dtest=DatabaseOutageIntegrationTest`: echte DB mit bereits benutzten Verbindungen stoppen, 300 Nachrichten einspeisen, DB unabhängig vom Senden nach 15 Sekunden wieder starten; zwei Writer bleiben aktiv.
 5. **Was erwarten wir vor der Implementierung?** Der kombinierte Fehlerfall ist noch nicht gemessen. Ein reiner Mock-Test der drei Versuche genügt nicht.

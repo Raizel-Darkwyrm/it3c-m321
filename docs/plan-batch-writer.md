@@ -54,7 +54,14 @@ Das Abschlusskästchen bleibt bis zum erfolgreichen Root-Lauf und Docker-Build o
 
 ## Aufgabe 02: JSON-Vertrag und Eingabeprüfung
 
-- [ ] Abgeschlossen und geprüft
+- [x] Abgeschlossen und geprüft
+
+Prüfstand 01.10.2026: Eigener Record und Decoder implementiert. Der erste
+Vertragstest scheiterte erwartungsgemäss an den noch fehlenden Klassen.
+Nach Umsetzung und ergänzten Grenzprüfungen ist `mvn -pl batch-writer clean test`
+erfolgreich: 34 Decoder-Prüfungen und zwei vorhandene Kontextprüfungen,
+keine Fehler und keine übersprungenen Tests. Kein Broker-/Datenbankzugriff;
+die offenen Docker-Prüfungen aus Aufgabe 01 bleiben davon unberührt.
 
 1. **Ziel:** Vollständige Nachrichten aus UTF-8-JSON ohne Java-Typheader lesen und prüfen.
 2. **Warum kommt dieser Schritt jetzt?** Puffer und Datenbank sollen bereits mit dem richtigen Datenmodell arbeiten.

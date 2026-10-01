@@ -16,6 +16,11 @@
     <description>Eigenständiger Hintergrunddienst für die spätere Stapelspeicherung</description>
 
     <dependencies>
+        <!-- Liest JSON ausdrücklich, ohne Webserver oder Java-Typheader. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
         <!-- Der Hintergrunddienst braucht Spring, aber keinen HTTP-Server. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

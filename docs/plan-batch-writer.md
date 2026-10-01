@@ -99,6 +99,13 @@ bleibt bis zur erfolgreichen Prüfung mit PostgreSQL 16 offen.
 
 - [ ] Abgeschlossen und geprüft
 
+Prüfstand 01.10.2026: Postgres-Dienst, Volume, schreibgeschützter Init-Mount,
+TCP-Healthcheck und drei Beispielvariablen ergänzt. `docker compose config
+--format json` ist vor und nach der Änderung nicht ausführbar, weil der
+Docker-Befehl fehlt. Start, Schema und Datenerhalt beim Neustart sind daher
+noch nicht geprüft. Die lokale `.env` blieb unverändert und ist weiterhin
+ignoriert und nicht getrackt. Das Abschlusskästchen bleibt offen.
+
 1. **Ziel:** PostgreSQL mit dem geprüften Schema intern starten.
 2. **Warum kommt dieser Schritt jetzt?** Das Init-Skript existiert; der erste Containerstart kann deshalb das vollständige Schema erzeugen.
 3. **Welche Dateien werden verändert?** `docker-compose.yml`, `.env.example`; lokale `.env` nur bei Bedarf ergänzen, niemals committen.

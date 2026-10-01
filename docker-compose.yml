@@ -1,7 +1,26 @@
-# Ausbaustufe 1: nur der Broker und der chat-service.
-# Postgres, Keycloak, web-gateway und batch-writer kommen in den
-# folgenden Schritten dazu.
+# Bewertung 1: Broker, chat-service und die Datenbank für den Schreibweg.
+# Der batch-writer wird in einem späteren Schritt als Dienst ergänzt.
 services:
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      # Das Schema entsteht nur beim ersten Start mit leerem Datenverzeichnis.
+      - ./postgres/init/001-create-message.sql:/docker-entrypoint-initdb.d/001-create-message.sql:ro
+    networks:
+      - chat-net
+    healthcheck:
+      # TCP vermeidet die Bereitschaftsmeldung des temporären Init-Servers.
+      # $$ verschiebt die Variablenauflösung von Compose in den Container.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   rabbitmq:
     image: rabbitmq:3.13-management
@@ -35,3 +54,7 @@ services:
 networks:
   chat-net:
     name: chat-net
+
+# Die Daten überleben einen normalen Neustart oder Ersatz des Containers.
+volumes:
+  postgres-data:

@@ -26,9 +26,11 @@ Diese Liste betrifft bereits bearbeitete Aufgaben; Tests späterer Aufgaben
 sind weiterhin dort geplant. Kein Test wird wegen dieser Markierung deaktiviert.
 Erst nach erfolgreicher Ausführung mit Datum und Ergebnis abhaken.
 
-Aktueller Stand nach Aufgabe 14: Alle Testläufe sind auf Benutzerwunsch bis zum
+Aktueller Stand nach Sichtprüfung von Aufgabe 16: Alle Testläufe sind auf Benutzerwunsch bis zum
 gesammelten Testabschnitt zurückgestellt. N1–N14 waren bereits wegen fehlendem
-Docker/Compose offen; N15 enthält zusätzlich noch zu erstellende Tests. Frühere Fehlversuche unten bleiben als Historie
+Docker/Compose offen; N15 und N16 enthalten zusätzlich noch zu erstellende Tests.
+Aufgabe 15 wurde beim ausdrücklichen Weitergehen zu Aufgabe 16 nicht bearbeitet
+und bleibt ebenfalls offen. Frühere Fehlversuche unten bleiben als Historie
 erhalten und werden nicht wiederholt, solange die Voraussetzung unverändert fehlt.
 Die Tests ohne Docker werden ausdrücklich ausgewählt; das ist kein vollständiger
 Root- oder Writer-Testlauf. Es wurden keine Tests per Annotation oder POM deaktiviert.
@@ -165,8 +167,24 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   nur wegen Stop. Tatsächliche Stop-Dauer samt Kanalschluss messen und Blockaden
   ausschliessen. Anschliessend vorhandene Tests und Root-Testlauf nachholen.
 
+- [ ] **N16 – Aufgabe 16: Zwei Writer und konkurrierende Inserts; Tests noch erstellen.**
+  Auf Benutzerwunsch zurückgestellt. `test/service/MultipleWritersIntegrationTest.java`
+  ist noch nicht angelegt. Zwei getrennte Anwendungskontexte mit eigenen AMQP-
+  und DB-Verbindungen starten, dieselbe Queue und Datenbank verwenden. Genau zwei
+  Consumer nachweisen, 1'000 neue eindeutige IDs senden und binnen 60 Sekunden
+  alle IDs genau einmal gespeichert, ready/unacknowledged null und keine neuen
+  DLQ-Einträge erwarten. Keine 50:50-Verteilung verlangen. Zusätzlich zwei echte
+  Transaktionen mit derselben ID gezielt überlappen lassen; der Konflikt darf
+  nicht nur zufällig entstehen. Am Ende genau eine unveränderte DB-Zeile und
+  beide Lieferungen abgeschlossen, ohne DLQ-Zuwachs. Die Synchronisation des
+  Testfalls muss innerhalb der produktiven DB-Zeitgrenzen liegen; diese nicht
+  für den Test lockern. Erst nach Erstellung ausführen:
+  `mvn -pl batch-writer test '-Dtest=MultipleWritersIntegrationTest'`.
+  Die spätere Zwei-Container-Prüfung bleibt Aufgabe 18/21. Vor der gemeinsamen
+  Abnahme auch Aufgabe 15 und die offenen Lebenszyklusnachweise aus N15 nachholen.
+
 Nach dem Nachholen die Ergebnisse auch in den Prüfständen der Aufgaben 01,
-03, 04, 05, 06, 09, 10, 11, 12, 13 und 14 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
+03, 04, 05, 06, 09, 10, 11, 12, 13, 14 und 16 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
 
 ## Dateinamen und Testkonventionen
 
@@ -538,11 +556,25 @@ und Diff-Sichtprüfung, keine Aussage über bestandenes Laufzeitverhalten. Die
 
 - [ ] Abgeschlossen und geprüft
 
+Stand 01.10.2026: Auf ausdrücklichen Benutzerwunsch nach Aufgabe 14 zu Aufgabe 16
+weitergegangen; Aufgabe 15 bleibt unbearbeitet. Aufgabe 16 ist primär ein
+Testnachweis und wird gemäss Benutzerfestlegung zum späteren Testabschnitt
+zurückgestellt (N16). Keine Testdatei erstellt, keine Tests und kein Build
+ausgeführt. Quelltext-Sichtprüfung: Puffer, Timer, Kanalreferenzen und Sperren
+sind Instanzfelder; `chat.persist` ist nicht exklusiv und ohne Single-Active-
+Consumer-Argument deklariert. Pro Instanz ist ein Consumer konfiguriert.
+Primary Key und `ON CONFLICT (id) DO NOTHING` sind vorhanden. Dies ist kein
+Nachweis für einen erfolgreichen parallelen Betrieb oder konfliktfreie Recovery.
+Kein konkreter Befund begründet hier eine Produktionscodeänderung. Der Writer
+ist noch nicht als Compose-Dienst integriert; das folgt in Aufgabe 18.
+Commit für diesen Dokumentationsstand: `docs: Nachweis für zwei batch-writer zurückstellen`.
+Die unten geplante Test-Commit-Message bleibt für den tatsächlichen Testschritt erhalten.
+
 1. **Ziel:** Zwei unabhängige Writer konsumieren gemeinsam ohne doppelte Zeilen.
-2. **Warum kommt dieser Schritt jetzt?** Der einzelne Writer samt Duplikatbehandlung und Kanal-Lebenszyklus ist geprüft. Parallelität kommt als nächste Fehlerquelle hinzu und wird vor S7 getestet.
+2. **Warum kommt dieser Schritt jetzt?** Der einzelne Writer samt Duplikatbehandlung und Kanal-Lebenszyklus ist implementiert, seine echten Nachweise bleiben offen. Der Paralleltest muss im späteren Testabschnitt vor S7 nachgeholt werden.
 3. **Welche Dateien werden verändert?** Neu `test/service/MultipleWritersIntegrationTest.java`; nur bei Testbefunden betroffene Consumer-/Batch-/Persistenz-Dateien korrigieren.
 4. **Welcher Test wird zuerst geschrieben oder ausgeführt?** `mvn -pl batch-writer test -Dtest=MultipleWritersIntegrationTest`: zwei getrennte Writer-Anwendungskontexte/Verbindungen, gemeinsamer Broker und DB, zwei Consumer und 1'000 eindeutige Nachrichten. Separater synchronisierter Fall für überlappende Transaktionen mit derselben ID.
-5. **Was erwarten wir vor der Implementierung?** Ein-Instanz-Verhalten ist belegt; gemeinsame statische Zustände oder konkurrierende Inserts sind noch nicht ausgeschlossen.
+5. **Was erwarten wir vor der Implementierung?** Instanzlokale Zustände sind im Quelltext erkennbar; Ein-Instanz-Verhalten, echte Parallelität und konkurrierende Inserts sind noch nicht vollständig nachgewiesen.
 6. **Was implementieren wir?** Den Paralleltest; bei Bedarf Zustand tatsächlich instanzlokal machen. Kein globales Schloss, keine Raumverteilung, keine exklusive Queue. Datenbankkonflikt gezielt provozieren statt auf zufällige zeitliche Überlappung zu hoffen.
 7. **Was erwarten wir danach?** Zwei Consumer, alle IDs genau einmal gespeichert; konkurrierendes Duplikat ebenfalls nur eine Zeile, beide Lieferungen abgeschlossen, DLQ leer. Keine 50:50-Verteilung verlangen.
 8. **Welches Bewertungsszenario wird vorbereitet oder erfüllt?** S6 im Integrationstest nachgewiesen; Voraussetzung für den S7-Aufbau.

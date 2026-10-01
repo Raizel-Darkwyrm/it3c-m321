@@ -34,6 +34,14 @@ Testklassen enden auf `Test`, auch `IntegrationTest`, damit `mvn test` sie wie i
 
 - [ ] Abgeschlossen und geprüft
 
+Prüfstand 01.10.2026: Modul und Startklasse implementiert; die zwei Prüfungen in
+`BatchWriterApplicationTest` sind grün. Der erste Testlauf ohne Startklasse scheiterte
+erwartungsgemäss beim Übersetzen. Die Root-Ausgangsprüfung und der erneute Root-Lauf
+scheitern an drei vorhandenen chat-service-Integrationstests, weil Testcontainers
+keine Docker-Umgebung findet. `docker compose build chat-service` ist ebenfalls
+blockiert: Der Docker-Befehl ist nicht verfügbar. Keine Tests wurden deaktiviert.
+Das Abschlusskästchen bleibt bis zum erfolgreichen Root-Lauf und Docker-Build offen.
+
 1. **Ziel:** Ein baubares Modul `batch-writer` im vorhandenen Maven-Reaktor.
 2. **Warum kommt dieser Schritt jetzt?** Alle weiteren Tests brauchen einen ausführbaren Modulrahmen.
 3. **Welche Dateien werden verändert?** Root-`pom.xml`; neu `batch-writer/pom.xml`, `main/BatchWriterApplication.java`, `test/BatchWriterApplicationTest.java`; `chat-service/Dockerfile` für die zusätzliche Modul-POM im Reaktor.

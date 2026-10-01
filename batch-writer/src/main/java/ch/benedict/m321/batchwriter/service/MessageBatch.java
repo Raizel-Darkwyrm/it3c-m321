@@ -63,10 +63,15 @@ public class MessageBatch {
     /** Beide Auslöser übergeben unter derselben Sperre eine Kopie und setzen den Sammelzustand zurück. */
     private List<PendingMessage> release() {
         List<PendingMessage> ready = List.copyOf(messages);
+        discard();
+        return ready;
+    }
+
+    /** Verwirft nur lokale Referenzen; unbestätigte Lieferungen bleiben beim Broker erhalten. */
+    public synchronized void discard() {
         messages.clear();
         receivingChannel = null;
         startedAtNanos = 0;
-        return ready;
     }
 
     /** Macht den Sammelstand sichtbar, ohne die veränderliche interne Liste herauszugeben. */

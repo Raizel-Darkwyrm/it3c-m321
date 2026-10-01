@@ -6,6 +6,7 @@ Als Vorbild dient [plan-chat-service.md](plan-chat-service.md): kleine Aufgaben,
 
 ## Arbeitsweise und Git-Reihenfolge
 
+- **Benutzerfestlegung ab Aufgabe 14:** Tests werden bis nach den Implementierungsaufgaben zurückgestellt. Vorerst keine neuen Tests schreiben und keine Testläufe starten. Die unten ursprünglich vorgesehenen Testschritte bleiben als Nachholaufträge erhalten; fehlende Testdateien ausdrücklich benennen. Keine vorhandenen Tests deaktivieren. Implementiert bedeutet bis zur späteren Prüfung nicht abgeschlossen und geprüft. Auch Aufgaben, deren Hauptinhalt ein Testnachweis ist, behalten ihren offenen Nachweis; bei ihnen ist später der vereinbarte Testschritt nachzuholen.
 - Dieser Plan wird vor Beginn der Implementierung separat gesichert. Vorgeschlagene Commit-Message: `docs: Umsetzungsplan für batch-writer festlegen`. Das Erstellen dieses Dokuments führt selbst keinen Commit aus.
 - Danach Aufgaben 01 bis 21 in der angegebenen Reihenfolge bearbeiten. Die Nummern beziehen sich auf diesen Plan, nicht auf die bisherigen Gesprächsschritte.
 - Pro Aufgabe zuerst den angegebenen Test schreiben oder die Prüfung ausführen. Bei einer neuen Funktion den erwarteten fachlichen Fehlschlag festhalten; ein nicht verfügbares Docker oder ein Downloadfehler ist kein fachlicher Rot-Nachweis.
@@ -25,8 +26,9 @@ Diese Liste betrifft bereits bearbeitete Aufgaben; Tests späterer Aufgaben
 sind weiterhin dort geplant. Kein Test wird wegen dieser Markierung deaktiviert.
 Erst nach erfolgreicher Ausführung mit Datum und Ergebnis abhaken.
 
-Aktueller Stand nach Aufgabe 13: N1–N14 **noch nicht ausgeführt für den aktuellen
-Stand – Docker/Compose fehlt**. Frühere Fehlversuche unten bleiben als Historie
+Aktueller Stand nach Aufgabe 14: Alle Testläufe sind auf Benutzerwunsch bis zum
+gesammelten Testabschnitt zurückgestellt. N1–N14 waren bereits wegen fehlendem
+Docker/Compose offen; N15 enthält zusätzlich noch zu erstellende Tests. Frühere Fehlversuche unten bleiben als Historie
 erhalten und werden nicht wiederholt, solange die Voraussetzung unverändert fehlt.
 Die Tests ohne Docker werden ausdrücklich ausgewählt; das ist kein vollständiger
 Root- oder Writer-Testlauf. Es wurden keine Tests per Annotation oder POM deaktiviert.
@@ -147,8 +149,24 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   Fünf ergänzende Prüfungen ohne Docker belegen bereits, dass ein ungültiger
   Eintrag den gültigen Puffer und dessen erste 200-ms-Frist nicht verändert.
 
+- [ ] **N15 – Aufgabe 14: Kanalverlust und Stop prüfen; Tests noch erstellen.**
+  Auf Benutzerwunsch weder Testdatei angelegt noch Tests oder Build ausgeführt.
+  Zuerst `test/messaging/ConsumerLifecycleIntegrationTest.java` erstellen und
+  Unit-Tests für die neuen Zustandsübergänge ergänzen. Erst danach:
+  `mvn -pl batch-writer test '-Dtest=ConsumerLifecycleIntegrationTest,MessageConsumerTest,BatchRuleTest'`.
+  Fälle: Kanal nach Commit vor erstem bzw. nach einzelnen ACKs schliessen;
+  Wiederzustellung mit genau einer DB-Zeile je ID und ohne DLQ-Zuwachs. Alte
+  Delivery-Tags dürfen auch bei wiederverwendetem Spring-Proxy niemals auf den
+  neuen physischen Kanal gelangen; verspätete Shutdown-Ereignisse dürfen keinen
+  neuen Puffer leeren. NACK-Sendefehler gesondert prüfen. Stop mit ungespeichertem
+  Teilstapel: kein neuer Insert und kein ACK, nach Kanalschluss erneut zustellbar.
+  Stop während Commit bzw. Retry: fünf Sekunden Wartefrist auf aktive Verarbeitung,
+  danach Unterbrechung und Bestätigungssperre; kein neuer Stapel und kein DLQ-NACK
+  nur wegen Stop. Tatsächliche Stop-Dauer samt Kanalschluss messen und Blockaden
+  ausschliessen. Anschliessend vorhandene Tests und Root-Testlauf nachholen.
+
 Nach dem Nachholen die Ergebnisse auch in den Prüfständen der Aufgaben 01,
-03, 04, 05, 06, 09, 10, 11, 12 und 13 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
+03, 04, 05, 06, 09, 10, 11, 12, 13 und 14 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
 
 ## Dateinamen und Testkonventionen
 
@@ -479,11 +497,24 @@ bleibt deshalb unabgehakt. Kein Beginn von Aufgabe 14.
 
 - [ ] Abgeschlossen und geprüft
 
+Implementierungsstand 01.10.2026: Empfang und Timer verwenden eine gemeinsame
+`ReentrantLock`-Sperre. Physische Empfangskanäle werden aus Spring-Proxys entnommen;
+Shutdown-Ereignisse verwerfen zugehörige Referenzen unter derselben Sperre, ohne
+den Broker-I/O-Thread darauf warten zu lassen. `MessageBatch.discard()` verwirft
+nur den lokalen Puffer. Beim Kontext-Schliessereignis keine neue Aufnahme mehr,
+höchstens fünf Sekunden Warten auf die laufende Verarbeitung, danach Interrupt,
+Bestätigungssperre und Kanalschluss. Wiederholter Stop ist wirkungslos. ACK-Fehler
+bleiben ausserhalb der DB-Wiederholung. Keine zusätzlichen Konfigurationswerte
+oder Änderungen an Retry-Regeln. Tests und die geplante Testdatei gemäss neuem
+Benutzerauftrag zurückgestellt (N15); auch kein Build ausgeführt. Nur Quelltext-
+und Diff-Sichtprüfung, keine Aussage über bestandenes Laufzeitverhalten. Die
+83 erfolgreichen Tests aus Aufgabe 13 gelten ausschliesslich für den damaligen Stand.
+
 1. **Ziel:** Kanalfehler nach Commit verursachen weder falsche Retries noch Datenverlust.
 2. **Warum kommt dieser Schritt jetzt?** Die ACK-/NACK-Grenze ist vorhanden; ihre Unterbrechung lässt sich jetzt gezielt testen.
 3. **Welche Dateien werden verändert?** `main/messaging/MessageConsumer.java`; neu `test/messaging/ConsumerLifecycleIntegrationTest.java`; Konfiguration nur für konkret benötigte Stop-/Recovery-Einstellungen.
 4. **Welcher Test wird zuerst geschrieben oder ausgeführt?** `mvn -pl batch-writer test -Dtest=ConsumerLifecycleIntegrationTest`: Kanal nach Commit vor vollständigem ACK schliessen, erneut zustellen lassen; zusätzlich Stop mit ungespeichertem Teilstapel.
-5. **Was erwarten wir vor der Implementierung?** Normaler Weg ist grün, sichere Behandlung alter Kanalreferenzen und Stop-Verhalten noch nicht belegt.
+5. **Was erwarten wir vor der Implementierung?** Bisherige Tests ohne Docker sind für den Stand aus Aufgabe 13 grün; der echte Normalbetrieb und die sichere Behandlung alter Kanalreferenzen sowie das Stop-Verhalten bleiben nachzuweisen.
 6. **Was implementieren wir?** Alte Lieferungsreferenzen nach Kanalverlust verwerfen; keine ACKs auf neuem Kanal mit alten IDs. ACK-Fehler erhöhen keinen DB-Versuchszähler und führen nicht zur DLQ. Bei Stop keine neuen Stapel beginnen; nur committed Daten bestätigen, Rest durch Kanalschluss erneut verfügbar lassen.
 7. **Was erwarten wir danach?** Wiederzugestellte Daten bleiben eindeutig; Eingangsqueue wird nach Recovery leer, keine DLQ-Nachricht nur aufgrund eines ACK-Fehlers. Unbestätigte Stop-Reste bleiben wieder zustellbar.
 8. **Welches Bewertungsszenario wird vorbereitet oder erfüllt?** S5–S7 abgesichert, zusätzlich spezifiziertes Stop-Verhalten.

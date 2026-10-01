@@ -25,7 +25,7 @@ Diese Liste betrifft bereits bearbeitete Aufgaben; Tests späterer Aufgaben
 sind weiterhin dort geplant. Kein Test wird wegen dieser Markierung deaktiviert.
 Erst nach erfolgreicher Ausführung mit Datum und Ergebnis abhaken.
 
-Aktueller Stand ab Aufgabe 10: N1–N11 **noch nicht ausgeführt für den aktuellen
+Aktueller Stand nach Aufgabe 11: N1–N12 **noch nicht ausgeführt für den aktuellen
 Stand – Docker/Compose fehlt**. Frühere Fehlversuche unten bleiben als Historie
 erhalten und werden nicht wiederholt, solange die Voraussetzung unverändert fehlt.
 Die Tests ohne Docker werden ausdrücklich ausgewählt; das ist kein vollständiger
@@ -112,8 +112,17 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   erfolgreich sein; Rollback und ausbleibende Alt-Sperren mitprüfen. Die bestehenden
   Persistenzprüfungen müssen mit der neuen Abbruchlogik ebenfalls bestehen.
 
+- [ ] **N12 – Aufgabe 11: Wiederholung in neuer Transaktion nach Rollback.**
+  `mvn -pl batch-writer test '-Dtest=MessagePersistenceIntegrationTest'`.
+  Noch nicht ausgeführt – Docker/PostgreSQL fehlt. Die zusätzliche achte Prüfung
+  provoziert einen Fehler nach dem Insert vor dem Commit. Beim zweiten Versuch
+  muss die Tabelle noch leer sein, die Transaktions-ID muss sich unterscheiden
+  und nach Erfolg genau die unveränderte Nachricht gespeichert sein.
+  Die fünf ausgewählten Testklassen ohne Docker sind nach Aufgabe 11 mit
+  insgesamt 68 Prüfungen erfolgreich; dies ersetzt keinen Integrationstest.
+
 Nach dem Nachholen die Ergebnisse auch in den Prüfständen der Aufgaben 01,
-03, 04, 05, 06, 09 und 10 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
+03, 04, 05, 06, 09, 10 und 11 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
 
 ## Dateinamen und Testkonventionen
 
@@ -362,8 +371,20 @@ zum Versuchsbudget und führen keine Wiederholungslogik aus Aufgabe 11 ein.
 
 - [ ] Abgeschlossen und geprüft
 
+Prüfstand 01.10.2026: Wiederholung implementiert. Der Ausgangstest scheiterte
+beim Übersetzen an der noch fehlenden Klasse. Danach elf neue Ablaufprüfungen
+und 57 bisherige Tests ohne Docker erfolgreich, keine Fehler oder übersprungenen
+Tests innerhalb der Auswahl. Gezielter Befehl:
+`mvn -pl batch-writer test '-Dtest=BatchWriteServiceTest,ApplicationConfigurationTest,DatabaseAttemptTimeoutTest,MessageDecoderTest,BatchRuleTest'`.
+Die Wartefunktion wird im Test ersetzt; Reihenfolge und jeweils 5000 ms werden
+geprüft. Die produktive Methode wartet mit `Thread.sleep`. Unterbrechungen
+werden separat weitergegeben und andere Fehler nicht als DB-Fehler gezählt.
+Der zusätzliche PostgreSQL-Test ist kompiliert, aber noch nicht ausgeführt (N12).
+Die echte Zeitgrenze aus Aufgabe 10 bleibt ebenfalls offen (N11). Daher bleibt
+das Abschlusskästchen offen; keine Aussage über einen bereits bestandenen S7-Test.
+
 1. **Ziel:** Schreibfehler höchstens zweimal wiederholen und ein eindeutiges Ergebnis an den späteren Consumer liefern.
-2. **Warum kommt dieser Schritt jetzt?** Ein Versuch besitzt bereits die geprüfte Transaktions- und Zeitgrenze.
+2. **Warum kommt dieser Schritt jetzt?** Die Transaktions- und Zeitbegrenzung eines einzelnen Versuchs ist implementiert; ihre noch offenen realen Nachweise bleiben N10/N11. Darauf lässt sich der Wiederholungsablauf unabhängig ohne Docker prüfen.
 3. **Welche Dateien werden verändert?** Neu `main/service/BatchWriteService.java`, `test/service/BatchWriteServiceTest.java`; vorhandene Persistenztests für neue Versuche mit neuer Transaktion ergänzen.
 4. **Welcher Test wird zuerst geschrieben oder ausgeführt?** `mvn -pl batch-writer test -Dtest=BatchWriteServiceTest`: Erfolg beim ersten/zweiten/dritten Versuch, drei Fehler, fünf Sekunden Pause vor jeder Wiederholung, unveränderter Stapel, kein vierter Versuch. Für die Ablaufprüfung kontrollierte Wartefunktion nutzen; echte Zeiten später in S7 messen.
 5. **Was erwarten wir vor der Implementierung?** Ein Fehler beendet bisher einen einzelnen Versuch; Wiederholungsablauf fehlt.

@@ -7,6 +7,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -29,6 +30,13 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -178,6 +186,45 @@ class MessagePersistenceIntegrationTest {
         service.persist(empty);
         verifyNoInteractions(repository, manager);
         assertEquals(0, rowCount());
+    }
+
+    /** Nach einem Rollback muss die Wiederholung mit unverändertem Stapel eine neue Transaktion erhalten. */
+    @Test
+    void retriesInNewTransactionAfterRollback() throws InterruptedException {
+        MessageRepository realRepository = new MessageRepository(jdbcTemplate);
+        MessageRepository repository = spy(realRepository);
+        List<Long> transactionIds = new ArrayList<>();
+        doAnswer(invocation -> {
+            Long transactionId = jdbcTemplate.queryForObject("SELECT txid_current()", Long.class);
+            transactionIds.add(transactionId);
+            // Im zweiten Versuch darf der zurückgerollte erste Insert nicht sichtbar sein.
+            int rowsBeforeInsert = rowCount();
+            assertEquals(0, rowsBeforeInsert);
+            invocation.callRealMethod();
+            if (transactionIds.size() == 1) {
+                throw new DataAccessResourceFailureException("Failure after insert before commit");
+            }
+            return null;
+        }).when(repository).insertBatch(anyList());
+        BatchPersistenceService persistence = new BatchPersistenceService(
+                repository, transactionManager, dataSource, timeoutExecutor);
+        BatchWriteService service = new BatchWriteService(persistence);
+        BatchWriteService writer = spy(service);
+        doNothing().when(writer).pause(anyLong());
+        ChatMessage message = newMessage("Wiederholung nach Rollback");
+        List<ChatMessage> messages = List.of(message);
+
+        boolean committed = writer.write(messages);
+
+        assertTrue(committed);
+        int attemptCount = transactionIds.size();
+        assertEquals(2, attemptCount);
+        Long firstTransaction = transactionIds.get(0);
+        Long secondTransaction = transactionIds.get(1);
+        assertNotEquals(firstTransaction, secondTransaction);
+        int storedRows = rowCount();
+        assertEquals(1, storedRows);
+        assertStored(message);
     }
 
     /** Prüft Inhalt und Typabbildung aus einer unabhängig geöffneten JDBC-Verbindung. */

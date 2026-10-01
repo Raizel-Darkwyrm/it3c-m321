@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -20,7 +21,106 @@ import static org.mockito.Mockito.verifyNoInteractions;
 class BatchRuleTest {
 
     private final Channel channel = mock(Channel.class);
-    private final MessageBatch batch = new MessageBatch();
+    private final AtomicLong time = new AtomicLong();
+    private final MessageBatch batch = new MessageBatch(time::get);
+
+    /** Ein einzelner Eintrag wird exakt an der Frist auch ohne weiteren Eingang freigegeben. */
+    @Test
+    void releasesPartialBatchAt200Milliseconds() {
+        PendingMessage pending = message(channel, 1);
+        batch.add(pending);
+        time.set(199_999_999L);
+        List<PendingMessage> early = batch.releaseIfExpired();
+        assertTrue(early.isEmpty());
+        time.set(200_000_000L);
+        List<PendingMessage> ready = batch.releaseIfExpired();
+        assertEquals(1, ready.size());
+        assertSame(pending, ready.getFirst());
+        assertThrows(UnsupportedOperationException.class, () -> ready.add(pending));
+        assertEquals(0, batch.size());
+        List<PendingMessage> repeated = batch.releaseIfExpired();
+        assertTrue(repeated.isEmpty());
+    }
+
+    /** Folgeeingänge dürfen den ersten Eintrag nicht durch erneutes Warten verzögern. */
+    @Test
+    void keepsDeadlineWhenAnotherMessageArrives() {
+        PendingMessage first = message(channel, 1);
+        batch.add(first);
+        time.set(150_000_000L);
+        PendingMessage second = message(channel, 2);
+        batch.add(second);
+        time.set(200_000_000L);
+        List<PendingMessage> ready = batch.releaseIfExpired();
+        assertEquals(2, ready.size());
+    }
+
+    /** Leerlauf erzeugt keine Aufträge und zählt nicht zur Frist des nächsten Stapels. */
+    @Test
+    void startsDeadlineOnlyWithFirstMessage() {
+        time.set(1_000_000_000L);
+        List<PendingMessage> empty = batch.releaseIfExpired();
+        assertTrue(empty.isEmpty());
+        PendingMessage pending = message(channel, 1);
+        batch.add(pending);
+        time.set(1_199_999_999L);
+        List<PendingMessage> early = batch.releaseIfExpired();
+        assertTrue(early.isEmpty());
+        time.set(1_200_000_000L);
+        List<PendingMessage> ready = batch.releaseIfExpired();
+        assertEquals(1, ready.size());
+    }
+
+    /** Gewinnt die Grössengrenze, darf die gleichzeitige Fristprüfung nichts doppelt liefern. */
+    @Test
+    void sizeReleaseWinsWithoutDuplicateTimeoutRelease() {
+        for (int i = 1; i <= 499; i++) {
+            PendingMessage pending = message(channel, i);
+            batch.add(pending);
+        }
+        time.set(200_000_000L);
+        PendingMessage last = message(channel, 500);
+        List<PendingMessage> ready = batch.add(last);
+        List<PendingMessage> expired = batch.releaseIfExpired();
+        assertEquals(500, ready.size());
+        assertTrue(expired.isEmpty());
+    }
+
+    /** Gewinnt die Frist, gehört die nächste Lieferung zu einem Stapel mit neuer Frist. */
+    @Test
+    void timeoutReleaseStartsFreshBatch() {
+        for (int i = 1; i <= 499; i++) {
+            PendingMessage pending = message(channel, i);
+            batch.add(pending);
+        }
+        time.set(200_000_000L);
+        List<PendingMessage> ready = batch.releaseIfExpired();
+        assertEquals(499, ready.size());
+        Channel nextChannel = mock(Channel.class);
+        PendingMessage next = message(nextChannel, 1);
+        List<PendingMessage> immediate = batch.add(next);
+        assertTrue(immediate.isEmpty());
+        time.set(399_999_999L);
+        List<PendingMessage> early = batch.releaseIfExpired();
+        assertTrue(early.isEmpty());
+        time.set(400_000_000L);
+        List<PendingMessage> nextBatch = batch.releaseIfExpired();
+        assertEquals(1, nextBatch.size());
+        assertSame(next, nextBatch.getFirst());
+        assertEquals(499, ready.size());
+    }
+
+    /** Ein verspäteter Prüftermin darf keine neue Wartefrist für einen alten Stapel beginnen. */
+    @Test
+    void releasesOverdueBatchImmediately() {
+        time.set(-500_000_000L);
+        PendingMessage pending = message(channel, 1);
+        batch.add(pending);
+        time.set(500_000_000L);
+        List<PendingMessage> ready = batch.releaseIfExpired();
+        assertEquals(1, ready.size());
+        verifyNoInteractions(channel);
+    }
 
     /** Weniger als 500 Lieferungen dürfen keinen grössenbedingten Schreibauftrag auslösen. */
     @Test

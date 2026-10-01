@@ -49,7 +49,7 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   Primary Key, B-Tree-Index, gültige Inserts und Ablehnung doppelter IDs).
 - [ ] **N4 – Aufgabe 03: gesamten Writer-Testlauf wiederholen.**
   `mvn -pl batch-writer clean test`.
-  Nach Aufgabe 07: 46 erfolgreiche Prüfungen und fünf Docker-Setup-Fehler:
+  Nach Aufgabe 08: 52 erfolgreiche Prüfungen und fünf Docker-Setup-Fehler:
   je einer in `SchemaIntegrationTest` und `BatchWriterApplicationTest` sowie drei
   in `RabbitConfigIntegrationTest`. Erwartung: gesamter Lauf erfolgreich,
   einschliesslich Schema, Verbindungen und Queue-Deklaration.
@@ -258,7 +258,15 @@ verzeichnet; für Aufgabe 07 ist kein zusätzlicher Nachholtest blockiert.
 
 ## Aufgabe 08: Feste Sammelfrist von 200 ms
 
-- [ ] Abgeschlossen und geprüft
+- [x] Abgeschlossen und geprüft
+
+Prüfstand 01.10.2026: Feste Frist ab erstem Eintrag und unabhängig aufrufbare
+Fristprüfung implementiert. Die zuerst ergänzten Tests scheiterten an den fehlenden
+Schnittstellen. Danach alle 14 BatchRuleTest-Prüfungen erfolgreich, ohne echte
+Wartezeiten. Der vollständige Writer-Lauf hat 52 erfolgreiche Prüfungen und die
+fünf bekannten Docker-Setup-Fehler, keine übersprungenen Tests. Kein zusätzlicher
+Nachholtest für Aufgabe 08 blockiert. Der periodische Aufruf folgt erst in Aufgabe 12;
+die 200-ms-Frist begrenzt das Sammeln, nicht die Dauer eines Datenbank-Commits.
 
 1. **Ziel:** Auch Teilstapel ohne weitere Lieferungen rechtzeitig freigeben.
 2. **Warum kommt dieser Schritt jetzt?** Die Grössengrenze ist bereits unabhängig geprüft; jetzt kommt der zweite Auslöser dazu.

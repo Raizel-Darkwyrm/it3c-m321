@@ -77,6 +77,14 @@ die offenen Docker-Prüfungen aus Aufgabe 01 bleiben davon unberührt.
 
 - [ ] Abgeschlossen und geprüft
 
+Prüfstand 01.10.2026: Init-Skript und Schematest implementiert. Der erste Lauf
+meldete erwartungsgemäss die fehlende Init-Datei. Nach deren Anlage findet der
+Test die Datei, kann aber mangels Docker-Umgebung PostgreSQL nicht starten.
+`mvn -pl batch-writer clean test`: 36 vorhandene Prüfungen erfolgreich,
+ein Setup-Fehler im Schematest, keine übersprungenen Tests. Die fünf Prüfmethoden
+des Schematests konnten noch nicht ausgeführt werden. Das Abschlusskästchen
+bleibt bis zur erfolgreichen Prüfung mit PostgreSQL 16 offen.
+
 1. **Ziel:** Die Tabelle `message` mit sechs Spalten, Primary Key und Raum-/Zeitindex reproduzierbar erstellen.
 2. **Warum kommt dieser Schritt jetzt?** Das Schema muss vor seiner Einbindung in einen frischen Compose-Stack vorliegen; sonst würde ein zunächst leeres Volume ohne Tabelle initialisiert.
 3. **Welche Dateien werden verändert?** Neu `postgres/init/001-create-message.sql`, `test/database/SchemaIntegrationTest.java`; `batch-writer/pom.xml` für PostgreSQL-Testcontainers und erforderliche Testabhängigkeiten.

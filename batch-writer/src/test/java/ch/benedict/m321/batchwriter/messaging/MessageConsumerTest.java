@@ -6,6 +6,8 @@ import ch.benedict.m321.batchwriter.service.MessageBatch;
 import com.rabbitmq.client.Channel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
@@ -150,6 +152,65 @@ class MessageConsumerTest {
         verify(channel).basicNack(1, false, false);
         verify(channel).basicNack(2, false, false);
         verify(channel, never()).basicAck(anyLong(), anyBoolean());
+    }
+
+    /** Fehler zwischen gültigen Einträgen dürfen weder den Puffer leeren noch dessen Frist verschieben. */
+    @ParameterizedTest
+    @ValueSource(strings = {"json", "type", "field", "contentType", "encoding"})
+    void preservesValidBatchAndDeadlineAroundInvalidMessage(String failure) throws Exception {
+        Message first = message(1);
+        consumer.onMessage(first, channel);
+        time.set(150_000_000L);
+        Message invalid = invalidMessage(failure);
+        consumer.onMessage(invalid, channel);
+        verify(channel).basicNack(2, false, false);
+        verifyNoInteractions(writer);
+        verify(channel, never()).basicAck(anyLong(), anyBoolean());
+        time.set(175_000_000L);
+        Message third = message(3);
+        consumer.onMessage(third, channel);
+        Runnable timeout = scheduledTimeout();
+        time.set(200_000_000L);
+        timeout.run();
+
+        ArgumentCaptor<List<ChatMessage>> captor = ArgumentCaptor.captor();
+        verify(writer).write(captor.capture());
+        List<ChatMessage> stored = captor.getValue();
+        int size = stored.size();
+        assertEquals(2, size);
+        verify(channel).basicAck(1, false);
+        verify(channel).basicAck(3, false);
+        verify(channel, never()).basicAck(2, false);
+        verify(channel, times(1)).basicNack(anyLong(), anyBoolean(), anyBoolean());
+    }
+
+    /** Jede Variante verändert genau eine Vertragsvorgabe einer ansonsten gültigen Lieferung. */
+    private Message invalidMessage(String failure) {
+        Message original = message(2);
+        MessageProperties properties = original.getMessageProperties();
+        byte[] originalBody = original.getBody();
+        String json = new String(originalBody, StandardCharsets.UTF_8);
+        switch (failure) {
+            case "json":
+                json = "{invalid JSON";
+                break;
+            case "type":
+                json = json.replace("\"content\":\"Hallo\"", "\"content\":42");
+                break;
+            case "field":
+                json = json.replace("\"senderId\":\"anna\",", "");
+                break;
+            case "contentType":
+                properties.setContentType("text/plain");
+                break;
+            case "encoding":
+                properties.setContentEncoding("ISO-8859-1");
+                break;
+            default:
+                throw new IllegalArgumentException("Unknown test case");
+        }
+        byte[] body = json.getBytes(StandardCharsets.UTF_8);
+        return new Message(body, properties);
     }
 
     /** Ein ACK-Fehler darf keinen erneuten Datenbankaufruf und keine DLQ-Ablehnung auslösen. */

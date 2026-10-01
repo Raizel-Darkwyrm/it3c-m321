@@ -25,7 +25,7 @@ Diese Liste betrifft bereits bearbeitete Aufgaben; Tests späterer Aufgaben
 sind weiterhin dort geplant. Kein Test wird wegen dieser Markierung deaktiviert.
 Erst nach erfolgreicher Ausführung mit Datum und Ergebnis abhaken.
 
-Aktueller Stand nach Aufgabe 12: N1–N13 **noch nicht ausgeführt für den aktuellen
+Aktueller Stand nach Aufgabe 13: N1–N14 **noch nicht ausgeführt für den aktuellen
 Stand – Docker/Compose fehlt**. Frühere Fehlversuche unten bleiben als Historie
 erhalten und werden nicht wiederholt, solange die Voraussetzung unverändert fehlt.
 Die Tests ohne Docker werden ausdrücklich ausgewählt; das ist kein vollständiger
@@ -133,8 +133,22 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   Consumer nachweisen. Die Unit-Tests prüfen zusätzlich den sofortigen 500er-Auslöser;
   der Integrationstest verlangt keine garantierte Aufteilung in genau einen Stapel.
 
+- [ ] **N14 – Aufgabe 13: Ungültige Nachrichten isoliert in der DLQ nachweisen.**
+  `mvn -pl batch-writer test '-Dtest=InvalidMessageIntegrationTest'`.
+  Noch nicht ausgeführt – Docker/RabbitMQ/PostgreSQL fehlt. Ein gemischter Lauf
+  mit sechs gültigen Nachbarn und fünf ungültigen Lieferungen: fehlerhaftes JSON,
+  falscher Feldtyp, fehlendes Pflichtfeld, falscher Content-Type und falsche
+  Content-Encoding-Angabe. Binnen 20 Sekunden exakt die sechs gültigen IDs mit
+  unverändertem Inhalt in PostgreSQL, Eingangsqueue ready/unacknowledged null,
+  genau fünf wartende DLQ-Einträge und dort null unbestätigte Lieferungen.
+  Danach die fünf Bodies aus der isolierten Test-DLQ entnehmen und bytegenau
+  ohne Annahme über ihre Reihenfolge vergleichen; keine fehlenden, doppelten
+  oder zusätzlichen Bodies. Die produktive DLQ wird dabei nicht angefasst.
+  Fünf ergänzende Prüfungen ohne Docker belegen bereits, dass ein ungültiger
+  Eintrag den gültigen Puffer und dessen erste 200-ms-Frist nicht verändert.
+
 Nach dem Nachholen die Ergebnisse auch in den Prüfständen der Aufgaben 01,
-03, 04, 05, 06, 09, 10, 11 und 12 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
+03, 04, 05, 06, 09, 10, 11, 12 und 13 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
 
 ## Dateinamen und Testkonventionen
 
@@ -437,6 +451,19 @@ Der vollständige Kanal-/Stop-Nachweis bleibt Aufgabe 14; S3–S7 sind nicht abg
 ## Aufgabe 13: Ungültige Nachrichten und DLQ isoliert nachweisen
 
 - [ ] Abgeschlossen und geprüft
+
+Prüfstand 01.10.2026: `InvalidMessageIntegrationTest` erstellt und fünf Varianten
+in `MessageConsumerTest` ergänzt. Die neuen Prüfungen ohne Docker sind schon
+gegen den vorhandenen Produktionscode erfolgreich; es wird kein künstlicher
+Rot-Nachweis behauptet. Insgesamt 83 Tests ohne Docker erfolgreich, null Fehler
+und null übersprungene Tests in der Auswahl. Ausgeführt:
+`mvn -pl batch-writer test '-Dtest=MessageConsumerTest,ApplicationConfigurationTest,BatchWriteServiceTest,DatabaseAttemptTimeoutTest,MessageDecoderTest,BatchRuleTest'`.
+Die Varianten prüfen gültig–ungültig–gültig, nur ein NACK für den ungültigen
+Tag, zwei gültige Einträge im Schreibauftrag und unveränderte Freigabe bei 200 ms.
+Kein Produktionscode geändert. Der Integrationstest wurde kompiliert, wegen der
+bekannten fehlenden Infrastruktur aber nicht gestartet. N14 bleibt offen; erst
+der echte Broker-Nachweis bestätigt Routing und Body-Erhaltung. Das Kästchen
+bleibt deshalb unabgehakt. Kein Beginn von Aufgabe 14.
 
 1. **Ziel:** Fehlerhafte Nachrichten können gültige Stapel nicht beschädigen oder blockieren.
 2. **Warum kommt dieser Schritt jetzt?** Der komplette Fehlerpfad ist angeschlossen und kann am echten Broker geprüft werden.

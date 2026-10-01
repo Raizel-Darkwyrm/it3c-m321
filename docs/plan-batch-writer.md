@@ -49,10 +49,11 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   Primary Key, B-Tree-Index, gültige Inserts und Ablehnung doppelter IDs).
 - [ ] **N4 – Aufgabe 03: gesamten Writer-Testlauf wiederholen.**
   `mvn -pl batch-writer clean test`.
-  Nach Aufgabe 08: 52 erfolgreiche Prüfungen und fünf Docker-Setup-Fehler:
-  je einer in `SchemaIntegrationTest` und `BatchWriterApplicationTest` sowie drei
-  in `RabbitConfigIntegrationTest`. Erwartung: gesamter Lauf erfolgreich,
-  einschliesslich Schema, Verbindungen und Queue-Deklaration.
+  Nach Aufgabe 09: 52 erfolgreiche Prüfungen und sechs Docker-Setup-Fehler:
+  je einer in `SchemaIntegrationTest`, `BatchWriterApplicationTest` und
+  `MessagePersistenceIntegrationTest` sowie drei in `RabbitConfigIntegrationTest`.
+  Erwartung: gesamter Lauf erfolgreich, einschliesslich Schema, Verbindungen,
+  Queue-Deklaration und atomarer Persistenz.
 - [ ] **N5 – Aufgabe 04: Compose-Modell validieren.**
   `docker compose --env-file .env.example config --format json`.
   Bisher nicht ausführbar. Prüfen: `postgres:16`, drei gesetzte Postgres-Variablen,
@@ -86,8 +87,16 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   Deklaration mit den Producer-Eigenschaften erfolgreich, widersprüchliche
   Eigenschaften abgelehnt und vorhandene Queue erhalten. Keine Consumer.
 
+- [ ] **N10 – Aufgabe 09: Atomare Persistenz und Duplikatbehandlung prüfen.**
+  `mvn -pl batch-writer test '-Dtest=MessagePersistenceIntegrationTest'`.
+  Containerstart wegen fehlendem Docker blockiert; keine der sieben Prüfmethoden
+  ausgeführt. Erwartung: alle sechs Felder nach Commit sichtbar, 500 Zeilen mit
+  gemeinsamer Transaktions-ID, vollständiger Rollback bei DB-Fehler, Duplikate
+  innerhalb und nach Stapeln unverändert übersprungen, eigene Commit-Grenze auch
+  bei äusserer Transaktion, kein Schreib-/Transaktionsaufruf für leere Stapel.
+
 Nach dem Nachholen die Ergebnisse auch in den Prüfständen der Aufgaben 01,
-03, 04, 05 und 06 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
+03, 04, 05, 06 und 09 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
 
 ## Dateinamen und Testkonventionen
 
@@ -281,6 +290,14 @@ die 200-ms-Frist begrenzt das Sammeln, nicht die Dauer eines Datenbank-Commits.
 ## Aufgabe 09: Atomarer JDBC-Batch mit Duplikatbehandlung
 
 - [ ] Abgeschlossen und geprüft
+
+Prüfstand 01.10.2026: Parametergebundener JDBC-Batch und eigener Transaktionsservice
+implementiert. Der zuerst geschriebene Test scheiterte an den fehlenden Klassen.
+Nach Umsetzung kompiliert er, scheitert aber vor seinen sieben Prüfmethoden am
+Docker-Setup. Vollständiger Writer-Lauf: 52 erfolgreiche Prüfungen, sechs bekannte
+Docker-Setup-Fehler, keine übersprungenen Tests. Commit, Rollback und Duplikatverhalten
+sind damit noch nicht an PostgreSQL nachgewiesen; N10 bleibt offen. Kein ACK/NACK,
+keine Wiederholung und noch keine Begrenzung der Versuchsdauer.
 
 1. **Ziel:** Einen abgeschlossenen Stapel vollständig und idempotent speichern.
 2. **Warum kommt dieser Schritt jetzt?** Datenmodell und Stapelstruktur sind bekannt. Die Datenbankgarantie muss vor dem ersten Consumer-ACK geprüft sein.

@@ -2,8 +2,8 @@
 
 ## Docker-Nachholung vom 02.10.2026 – aktueller Stand
 
-**S1–S7 in vollständigen Maven- und anschliessenden Compose-/Fortsetzungsläufen
-praktisch nachgewiesen. S8 bleibt wegen des manuellen Stilreviews offen.**
+**S1–S8 sind nachgewiesen: S1 im vollständigen Maven-Lauf, S2–S7 praktisch im
+Compose-Stack und S8 durch manuelle/statische Prüfung mit statischer Zweitprüfung.**
 Die historischen Aussagen unterhalb dieses Abschnitts beschreiben den früheren
 Stand ohne Docker und werden durch diese Ergebnisse ersetzt.
 
@@ -24,7 +24,7 @@ PowerShell-Richtlinie verändert. Testklon ohne persönliche `.env`; neue Volume
 | Echte Integrationstests | Duplikate, ungültige Bodies/DLQ, Kanalverlust/Stop, Batch-Commit/Rollback, Fünf-Sekunden-Grenzen, parallele Writer und DB-Ausfall bestanden |
 | Datenerhalt nach Container-Ersatz | PostgreSQL und RabbitMQ nach S7 mit denselben Volumes ersetzt: **4.381 Zeilen** und vollständige Inhaltsprüfsumme unverändert; **220 DLQ-Nachrichten** erhalten; Eingangsqueue leer |
 | Stop der zwei untätigen Writer | Zusammen **0,778 Sekunden**; kein Nachweis einer maximalen Stop-Dauer unter beliebiger Last |
-| S8 | Keine getrackte `.env`, Ignore-Regel wirksam, keine Streams; vollständige manuelle Stilfreigabe weiterhin offen |
+| S8 | Manuell/statisch bestanden für die vier geprüften Kriterien: keine Streams, Kommentare über allen eigenen Klassen und Methoden, `.env` nicht getrackt; Ignore-Regel wirksam |
 
 ### Gefundene Ursachen und gezielte Korrekturen
 
@@ -60,6 +60,13 @@ Zwischen S2 und S7 wurden keine Tabellen, Queues oder Volumes geleert. Der
 zusätzliche Container-Ersatz erfolgte erst nach erfolgreichem S7. Die vorhandenen
 220 DLQ-Nachrichten stammen aus den Ausfallprüfungen, nicht aus S5.
 
+Bei S8 wurde der fehlende Kommentar über der anonymen Klasse in
+`MessageConsumerIntegrationTest` ergänzt; die statische Zweitprüfung fand keine
+fehlenden Klassen-/Methodenkommentare und keine Streams. `.env` ist laut
+`git ls-files` nicht getrackt. Weitere Stilabweichungen (verschachtelte Aufrufe und
+lange Testmethoden) wurden benannt, aber nicht refaktoriert; die S8-Freigabe
+bezieht sich auf die vier ausdrücklich geprüften Kriterien.
+
 Private Belege im Workspace unter `Erklärungen/`:
 
 - `Docker-Nachholung-vollstaendig.log` und `Docker-Nachholung-vollstaendig-2.log`:
@@ -77,20 +84,16 @@ Umgebung verwenden; bestehende Testvolumes nicht ungefragt löschen.
 
 ## Historisches Protokoll vor der Docker-Nachholung
 
-Stand: 02.10.2026. **Teilabnahme; S1–S8 nicht vollständig bestanden.**
-Docker/Compose fehlen in der aktuellen Arbeitsumgebung. Bekanntermassen blockierte
-Containerprüfungen wurden gemäss Benutzeranweisung nicht erneut gestartet.
-Die frühere Zurückstellung der Tests endet mit dem ausdrücklich beauftragten
-Abnahmeabschnitt 21. Es werden keine Tests deaktiviert oder bei fehlendem Docker
-als erfolgreich übersprungen.
+Früherer Stand am 02.10.2026: Teilabnahme ohne Docker/Compose; damals blockierte
+Containerprüfungen wurden gemäss Benutzeranweisung nicht gestartet. Diese
+Zurückstellung ist beendet: Docker ist verfügbar, die Integrationstests wurden
+nachgeholt. Die folgenden frühen Einzelergebnisse bleiben als Verlauf erhalten.
 
 ## Geprüfter Stand und Umgebung
 
-Produktionscode unverändert gegenüber `8805bef`; dieser Aufgaben-21-Commit ergänzt
-Testcode, Prüfskripte und Dokumentation. Erkennbar über
-`git log -1 --format=%H -- scripts/test-batch-writer.ps1`.
-Ein späterer vollständiger Abnahmelauf muss seinen tatsächlichen Commit und seine
-Messwerte ergänzen; dieses Dokument enthält keine vorweggenommenen Ergebnisse.
+Der frühere Aufgaben-21-Stand ergänzte gegenüber `8805bef` Testcode, Prüfskripte
+und Dokumentation. Die späteren Korrekturen, tatsächlich geprüften Commits und
+Messwerte der Docker-Nachholung sind oben dokumentiert.
 
 - Windows PowerShell 5.1, Java 21.0.10, Maven 3.9.11.
 - Maven war nicht im PATH, aber im lokalen Maven-Wrapper-Cache vorhanden; für die
@@ -99,8 +102,8 @@ Messwerte ergänzen; dieses Dokument enthält keine vorweggenommenen Ergebnisse.
   Der anschliessende reguläre Maven-Aufruf war erfolgreich. Keine POM-Version geändert.
 - Python 3.14 lokal für Syntax- und isolierte Clientprüfungen; der spätere interne
   Testclient verwendet `python:3.12-alpine`. Kein lokales Python für den Compose-Test nötig.
-- Keine Docker-Images gebaut, keine Produktcontainer gestartet, keine reale
-  Datenbank-Transaktionszahl, Ausfallzeit oder Queue-Laufzeit gemessen.
+- Damals noch keine Docker-Images gebaut oder Produktcontainer gestartet;
+  Build, Start und reale Messungen wurden inzwischen nachgeholt (siehe oben).
 
 ## Tatsächlich ausgeführte Prüfungen
 
@@ -127,27 +130,27 @@ Die neuen acht Consumer-Fälle behandeln Proxy-Kanalwechsel, verspätetes
 Schliessereignis, NACK-Fehler, partielle ACKs, Stop mit Teilstapel, Stop während
 erfolgreicher/fehlgeschlagener Arbeit sowie die abgelaufene Stop-Schonfrist.
 
-Die gezielte Testauswahl ist ausdrücklich **kein** `mvn clean test` und erfüllt S1
-noch nicht. Alte Integrationstest-Berichte dürfen nicht mit diesen aktuellen
-Ergebnissen zusammengerechnet werden.
+Die damalige gezielte Testauswahl war kein vollständiger Root-Lauf. S1 wurde
+inzwischen separat mit `mvn clean test` nachgewiesen: 141 Tests, 0 Fehler,
+0 Fehlschläge, 0 übersprungen. Die alten Einzelläufe werden nicht hinzugerechnet.
 
-## Neu vorbereitete Integrationstests
+## Inzwischen ausgeführte Integrationstests
 
 | Klasse | Inhalt | Ausführung |
 |---|---|---|
-| `DuplicateMessageIntegrationTest` | Rohe AMQP-Nachrichten nur mit `content_type`, Duplikate in kontrolliert demselben Stapel und nach Commit, neue Nachbar-ID; zusätzlicher Producer-Typheader | Noch nicht ausgeführt |
-| `ConsumerLifecycleIntegrationTest` | Echter Kanalverlust vor erstem/nach einzelnem ACK, Wiederzustellung mit eindeutigen Zeilen; echter Teilstapel-Stop ohne Insert | Noch nicht ausgeführt |
-| `MultipleWritersIntegrationTest` | Zwei produktive Kontexte und 1'000 IDs; gezielt überlappende Inserts derselben ID mit beobachtetem PostgreSQL-Lock und echten ACKs | Noch nicht ausgeführt |
-| `DatabaseOutageIntegrationTest` | Zwei Writer mit zuvor benutzten DB-Verbindungen, derselbe PostgreSQL-Container 15 Sekunden weg, 300 IDs in DB/DLQ binnen 90 Sekunden, Erholung beider ursprünglicher Instanzen | Noch nicht ausgeführt |
+| `DuplicateMessageIntegrationTest` | Rohe AMQP-Nachrichten nur mit `content_type`, Duplikate in kontrolliert demselben Stapel und nach Commit, neue Nachbar-ID; zusätzlicher Producer-Typheader | Mit echten Testcontainern bestanden |
+| `ConsumerLifecycleIntegrationTest` | Echter Kanalverlust vor erstem/nach einzelnem ACK, Wiederzustellung mit eindeutigen Zeilen; echter Teilstapel-Stop ohne Insert | Mit echten Testcontainern bestanden |
+| `MultipleWritersIntegrationTest` | Zwei produktive Kontexte und 1'000 IDs; gezielt überlappende Inserts derselben ID mit beobachtetem PostgreSQL-Lock und echten ACKs | Mit echten Testcontainern bestanden |
+| `DatabaseOutageIntegrationTest` | Zwei Writer mit zuvor benutzten DB-Verbindungen, derselbe PostgreSQL-Container 15 Sekunden weg, 300 IDs in DB/DLQ binnen 90 Sekunden, Erholung beider ursprünglicher Instanzen | Mit echten Testcontainern bestanden |
 
 `WriterTestStack` teilt nur den Testaufbau: isolierte Container mit produktivem
 Schema, rohe AMQP-Veröffentlichung, unabhängige DB-Abfragen und nicht entfernende
 Brokerdiagnose. Die ACK-Statistik wird mitgeprüft, damit eine kurzzeitig veraltete
 leere Queue bei Duplikaten nicht irrtümlich als Abschluss gilt. Die produktiven
 DB-Zeitgrenzen bleiben auch beim synchronisierten Konkurrenztest unverändert.
-Die Stabilität dieser neuen Integrationstests muss erstmals mit Docker geprüft werden.
+Diese Integrationstests bestanden in den oben genannten vollständigen Root-Läufen mit Docker.
 
-## Vollständigen Durchlauf nachholen
+## Anleitung für einen erneuten vollständigen Durchlauf
 
 Voraussetzungen: Java 21, Maven, Docker mit erreichbarem Server, Compose mit
 `up --wait`, Zugriff auf Maven-/Container-Registries. Einen **frischen Testklon**
@@ -181,21 +184,22 @@ Die privaten Ergebnisse entstehen in
 Bedarf ausschliesslich in `.git/info/exclude` aufgenommen. Die Anwendung und ihre
 Daten bleiben nach dem Test zur Diagnose bestehen; nur der temporäre Prüfclient
 wird entfernt. Ein fehlgeschlagener Vorabcheck kann abbrechen, bevor Ergebnisse
-angelegt werden. Das Skript selbst ist bislang nur syntaktisch und in einzelnen
-Hilfsfunktionen geprüft, **nicht am Docker-Stack validiert**.
+angelegt werden. Das Skript wurde am echten Docker-Stack verwendet und gezielt
+korrigiert. Die Szenarien wurden in Fortsetzungsläufen nachgewiesen; ein einzelner
+ununterbrochener Lauf des endgültigen Skripts wird weiterhin nicht behauptet.
 
-## Szenarien und fehlende Messwerte
+## Szenarien und erreichte Nachweise
 
-| Szenario | Messbare Erwartung | Aktueller Nachweis / noch fehlend |
+| Szenario | Messbare Erwartung | Aktueller Nachweis |
 |---|---|---|
-| S1 | Root `mvn clean test`, beide Module, alle erforderlichen Tests ohne Fehler/Skip | 99 ausgewählte Tests erfolgreich; vollständiger Lauf offen |
-| S2 | Frischer Vier-Dienste-Stack, Schema/PK/Index, keine Host-Ports, Consumer aktiv | Nur Konfiguration im Repository; Frischstart offen |
-| S3 | 1'000 Antwort-IDs/Inhalte binnen 60 s ab letzter Annahme gespeichert, ready/unacknowledged null | Skript vorbereitet; IDs, Dauer und Ergebnis fehlen |
-| S4 | Vor Start 1'000 ready, null unacknowledged/Consumer; danach rohe DB-Transaktionsdifferenz höchstens 100 und alle IDs gespeichert | Skript vorbereitet; Ausgangs-/Endwert und Differenz fehlen |
-| S5 | Derselbe rohe Body zweimal, genau eine unveränderte Zeile, beide Lieferungen abgeschlossen, DLQ absolut leer | Integrationstest und Skript vorbereitet; echter Nachweis offen |
-| S6 | Zwei Container/Consumer, 1'000 eindeutige gespeicherte IDs, Queue leer, keine neuen DLQ-Einträge | Integrationstests und Skript vorbereitet; Ausführung offen |
-| S7 | PostgreSQL 15 s weg; 300 IDs binnen 90 s in DB/DLQ; beide unveränderten Writer danach wieder erfolgreich | Integrationstest und Skript vorbereitet; Ausführung und Messwerte offen |
-| S8 | Keine Streams, Kommentare über allen Klassen/Methoden, verständlicher Code, keine Secrets | Automatische Teilprüfungen erfolgreich; vollständiges manuelles Review offen |
+| S1 | Root `mvn clean test`, beide Module, alle erforderlichen Tests ohne Fehler/Skip | 141 Tests, 0 Fehler, 0 Fehlschläge, 0 übersprungen |
+| S2 | Frischer Vier-Dienste-Stack, Schema/PK/Index, keine Host-Ports, Consumer aktiv | Image-Build und Frischstart praktisch bestanden |
+| S3 | 1'000 Antwort-IDs/Inhalte binnen 60 s ab letzter Annahme gespeichert, ready/unacknowledged null | Im Compose-Stack bestanden |
+| S4 | Vor Start 1'000 ready, null unacknowledged/Consumer; danach rohe DB-Transaktionsdifferenz höchstens 100 und alle IDs gespeichert | 54 → 60: 6 Transaktionen; alle IDs gespeichert |
+| S5 | Derselbe rohe Body zweimal, genau eine unveränderte Zeile, beide Lieferungen abgeschlossen, DLQ absolut leer | Integrationstest und Compose-Prüfung bestanden |
+| S6 | Zwei Container/Consumer, 1'000 eindeutige gespeicherte IDs, Queue leer, keine neuen DLQ-Einträge | Integrationstests und Compose-Prüfung bestanden |
+| S7 | PostgreSQL 15 s weg; 300 IDs binnen 90 s in DB/DLQ; beide unveränderten Writer danach wieder erfolgreich | Neustart nach etwa 15 Sekunden; Zuordnung fristgerecht, beide Writer ohne Neustart weitergelaufen |
+| S8 | Keine Streams, Kommentare über allen eigenen Klassen/Methoden, `.env` nicht getrackt | Manuell/statisch geprüft und nach Kommentarergänzung statisch erneut bestanden |
 
 S4 pollt innerhalb des Messfensters ausschliesslich den Broker. Je zwei Sekunden
 vor Baseline und Endwert dienen der Statistikveröffentlichung. Die rohe Differenz
@@ -209,9 +213,11 @@ ursprünglichen 300 IDs müssen Kontrollgruppen innerhalb zehn Sekunden gespeich
 werden und beide Writer innerhalb insgesamt 30 Sekunden neue Commit-Logs zeigen.
 Container-IDs, Startzeiten und Restart-Zähler werden verglichen.
 
-Nach verfügbarem Docker zuerst die neuen Integrationstests und danach den gesamten
-Durchlauf ausführen. Fehler zuerst erklären und gezielt korrigieren; erst nach
-erneuter erfolgreicher Prüfung entsprechende N1–N19-Markierungen und Aufgaben
-abhaken. README-Frischstart, Datenerhalt, echte Stop-Dauer sowie das manuelle S8-
-Review bleiben zusätzlich nach der Spezifikation zu prüfen. **Kein Abgabe-Tag und
-kein bestandener Gesamtnachweis werden mit diesem Zwischenstand behauptet.**
+Die Docker-/Integrationstests wurden nachgeholt. **S1–S8 sind nachgewiesen:**
+S1 durch den vollständigen Maven-Lauf, S2–S7 praktisch im Compose-Stack und S8
+durch manuelle/statische Prüfung. Datenerhalt beim Ersetzen der
+Infrastrukturcontainer ist bestätigt; die gemessene Stop-Dauer gilt für zwei
+untätige Writer. Die Nachweise stammen aus den oben beschriebenen Läufen und
+Fortsetzungen, nicht aus einem ununterbrochenen Lauf des endgültigen Skripts.
+**Der Abgabe-Tag wurde noch nicht gesetzt. Ein finaler Git-/Abgabecheck steht
+noch aus.**

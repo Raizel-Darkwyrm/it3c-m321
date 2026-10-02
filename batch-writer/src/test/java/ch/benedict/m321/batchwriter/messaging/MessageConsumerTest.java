@@ -4,6 +4,7 @@ import ch.benedict.m321.batchwriter.dto.ChatMessage;
 import ch.benedict.m321.batchwriter.service.BatchWriteService;
 import ch.benedict.m321.batchwriter.service.MessageBatch;
 import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.ShutdownListener;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -11,6 +12,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.rabbit.connection.ChannelProxy;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -20,8 +22,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -248,6 +255,186 @@ class MessageConsumerTest {
         consumer.onMessage(message, channel);
         verify(scheduler).shutdownNow();
         verifyNoInteractions(writer);
+    }
+
+    /** Ein wiederverwendeter Proxy darf alte Lieferungsnummern nicht auf den neuen Kanal übertragen. */
+    @Test
+    void discardsOldTagsWhenProxyChangesTarget() throws Exception {
+        ChannelProxy proxy = mock(ChannelProxy.class);
+        Channel replacement = mock(Channel.class);
+        when(replacement.isOpen()).thenReturn(true);
+        when(proxy.getTargetChannel()).thenReturn(channel, replacement);
+        Message first = message(71);
+        consumer.onMessage(first, proxy);
+        Message second = message(1);
+        consumer.onMessage(second, proxy);
+        ArgumentCaptor<Runnable> tasks = ArgumentCaptor.forClass(Runnable.class);
+        verify(scheduler, times(2)).schedule(tasks.capture(), eq(200L), eq(TimeUnit.MILLISECONDS));
+        List<Runnable> scheduled = tasks.getAllValues();
+        Runnable current = scheduled.getLast();
+        time.set(200_000_000L);
+        current.run();
+        verify(writer, times(1)).write(anyList());
+        verify(channel, never()).basicAck(anyLong(), anyBoolean());
+        verify(replacement).basicAck(1, false);
+        verify(replacement, never()).basicAck(71, false);
+    }
+
+    /** Ein verspätetes Schliessereignis darf den bereits neuen Puffer nicht verwerfen. */
+    @Test
+    void ignoresDelayedShutdownOfOldChannel() throws Exception {
+        Message first = message(71);
+        consumer.onMessage(first, channel);
+        ArgumentCaptor<ShutdownListener> callbacks = ArgumentCaptor.forClass(ShutdownListener.class);
+        verify(channel).addShutdownListener(callbacks.capture());
+        Channel replacement = mock(Channel.class);
+        when(replacement.isOpen()).thenReturn(true);
+        Message second = message(1);
+        consumer.onMessage(second, replacement);
+        ShutdownListener callback = callbacks.getValue();
+        callback.shutdownCompleted(null);
+        ArgumentCaptor<Runnable> cleanup = ArgumentCaptor.forClass(Runnable.class);
+        verify(scheduler).execute(cleanup.capture());
+        Runnable cleanupTask = cleanup.getValue();
+        cleanupTask.run();
+        ArgumentCaptor<Runnable> tasks = ArgumentCaptor.forClass(Runnable.class);
+        verify(scheduler, times(2)).schedule(tasks.capture(), eq(200L), eq(TimeUnit.MILLISECONDS));
+        List<Runnable> scheduled = tasks.getAllValues();
+        Runnable current = scheduled.getLast();
+        time.set(200_000_000L);
+        current.run();
+        verify(replacement).basicAck(1, false);
+        verify(writer, times(1)).write(anyList());
+    }
+
+    /** Ein NACK-Sendefehler schliesst den Kanal, ohne gültige Nachbarn zu speichern oder zu bestätigen. */
+    @Test
+    void closesChannelWhenRejectionFails() throws Exception {
+        Message first = message(1);
+        consumer.onMessage(first, channel);
+        IOException failure = new IOException("Channel lost");
+        doThrow(failure).when(channel).basicNack(2, false, false);
+        Message invalid = invalidMessage("json");
+        consumer.onMessage(invalid, channel);
+        Runnable timeout = scheduledTimeout();
+        time.set(200_000_000L);
+        timeout.run();
+        verify(channel).abort();
+        verifyNoInteractions(writer);
+        verify(channel, never()).basicAck(anyLong(), anyBoolean());
+    }
+
+    /** Nach einzelnen erfolgreichen ACKs darf der Rest bei einem Kanalfehler nicht als DB-Fehler gelten. */
+    @Test
+    void stopsAcknowledgingAfterPartialSuccess() throws Exception {
+        IOException failure = new IOException("Channel lost after first ACK");
+        doThrow(failure).when(channel).basicAck(2, false);
+        for (int i = 1; i <= 3; i++) {
+            Message next = message(i);
+            consumer.onMessage(next, channel);
+        }
+        Runnable timeout = scheduledTimeout();
+        time.set(200_000_000L);
+        timeout.run();
+        verify(channel).basicAck(1, false);
+        verify(channel).basicAck(2, false);
+        verify(channel, never()).basicAck(3, false);
+        verify(channel, never()).basicNack(anyLong(), anyBoolean(), anyBoolean());
+        verify(channel).abort();
+        verify(writer, times(1)).write(anyList());
+    }
+
+    /** Ein ungefüllter Stapel bleibt beim Stop unbestätigt und wird nicht nachträglich gespeichert. */
+    @Test
+    void discardsPartialBatchOnStop() throws Exception {
+        Message first = message(1);
+        consumer.onMessage(first, channel);
+        Runnable timeout = scheduledTimeout();
+        consumer.shutdown();
+        time.set(200_000_000L);
+        timeout.run();
+        consumer.shutdown();
+        verifyNoInteractions(writer);
+        verify(channel).abort();
+        verify(channel, never()).basicAck(anyLong(), anyBoolean());
+        verify(channel, never()).basicNack(anyLong(), anyBoolean(), anyBoolean());
+        verify(scheduler, times(1)).shutdownNow();
+    }
+
+    /** Innerhalb der Schonfrist ist nur ein bereits erfolgreicher Commit bestätigbar; Stop allein erzeugt keine DLQ. */
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void finishesActiveWriteDuringStopGracePeriod(boolean committed) throws Exception {
+        CountDownLatch writing = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        CountDownLatch stopping = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            writing.countDown();
+            boolean released = release.await(3, TimeUnit.SECONDS);
+            assertTrue(released);
+            return committed;
+        }).when(writer).write(anyList());
+        doAnswer(invocation -> {
+            stopping.countDown();
+            return null;
+        }).when(scheduler).shutdown();
+        Message first = message(1);
+        consumer.onMessage(first, channel);
+        Runnable timeout = scheduledTimeout();
+        time.set(200_000_000L);
+        ExecutorService tasks = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> processing = tasks.submit(timeout);
+            assertTrue(writing.await(2, TimeUnit.SECONDS));
+            Future<?> shutdown = tasks.submit(consumer::shutdown);
+            assertTrue(stopping.await(2, TimeUnit.SECONDS));
+            release.countDown();
+            processing.get(3, TimeUnit.SECONDS);
+            shutdown.get(3, TimeUnit.SECONDS);
+            if (committed) {
+                verify(channel).basicAck(1, false);
+            } else {
+                verify(channel, never()).basicAck(anyLong(), anyBoolean());
+            }
+            verify(channel, never()).basicNack(anyLong(), anyBoolean(), anyBoolean());
+        } finally {
+            release.countDown();
+            tasks.shutdownNow();
+        }
+    }
+
+    /** Nach fünf Sekunden muss Stop eine hängende Retry-Pause unterbrechen und Bestätigungen sperren. */
+    @Test
+    void interruptsActiveWriteAfterStopGracePeriod() throws Exception {
+        CountDownLatch writing = new CountDownLatch(1);
+        CountDownLatch blocked = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            writing.countDown();
+            blocked.await();
+            return true;
+        }).when(writer).write(anyList());
+        Message first = message(1);
+        consumer.onMessage(first, channel);
+        Runnable timeout = scheduledTimeout();
+        time.set(200_000_000L);
+        ExecutorService tasks = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> processing = tasks.submit(timeout);
+            assertTrue(writing.await(2, TimeUnit.SECONDS));
+            long started = System.nanoTime();
+            Future<?> shutdown = tasks.submit(consumer::shutdown);
+            shutdown.get(8, TimeUnit.SECONDS);
+            processing.get(2, TimeUnit.SECONDS);
+            long elapsed = System.nanoTime() - started;
+            assertTrue(elapsed >= 5_000_000_000L);
+            assertTrue(elapsed < 8_000_000_000L);
+            verify(channel, never()).basicAck(anyLong(), anyBoolean());
+            verify(channel, never()).basicNack(anyLong(), anyBoolean(), anyBoolean());
+            verify(channel, atLeastOnce()).abort();
+        } finally {
+            blocked.countDown();
+            tasks.shutdownNow();
+        }
     }
 
     /** Liefert die geplante Aufgabe, damit der Test den Fristablauf ohne Schlafen auslösen kann. */

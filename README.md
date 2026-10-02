@@ -25,8 +25,10 @@ Alle Aufgaben werden in **deinem Fork** gelöst. Das Original-Repository bleibt 
 
 Stand 02.10.2026: Writer und Compose-Konfiguration sind implementiert. Die aktuellen
 Builds, Containerstarts und Integrationstests sind noch nicht vollständig geprüft.
-Seit Aufgabe 14 werden Tests auf Wunsch gesammelt nachgeholt. Die folgenden Befehle
-sind die vorgesehene Anleitung, kein Bericht eines erfolgreichen Durchlaufs.
+In Aufgabe 21 wurden 91 Writer- und acht chat-service-Tests ohne Docker erfolgreich
+ausgeführt. Neue Integrationstests sind übersetzbar, aber noch nicht ausgeführt.
+Die folgenden Befehle sind die vorgesehene Anleitung, kein Bericht eines
+erfolgreichen vollständigen Durchlaufs.
 
 Aus der Projektwurzel, mit laufendem Docker und Compose sowie Java 21/Maven:
 
@@ -154,11 +156,16 @@ Mehrinstanzgarantien müssen noch mit den offenen Tests nachgewiesen werden.
 Die Abnahmekriterien und konkreten Prüfungen stehen in
 [`docs/spec-batch-writer.md`, Kapitel 19](docs/spec-batch-writer.md#19-abnahmekriterien).
 Die [Nachholliste im Umsetzungsplan](docs/plan-batch-writer.md#offene-prüfungen-zum-nachholen)
-führt die offenen Nachweise. Aufgabe 15 ist ebenfalls noch unbearbeitet.
-`scripts/test-batch-writer.ps1` und `docs/test-batch-writer.md` sind noch nicht erstellt;
-es gibt daher keinen verlinkbaren Messbericht und keinen bestandenen S1–S8-Gesamtlauf.
-Nach Erstellung des Prüfskripts ist der vorgesehene Aufruf
+führt die offenen Nachweise. Die zurückgestellten Testdateien einschliesslich
+Aufgabe 15 sind inzwischen ergänzt. Das [vorläufige Prüfprotokoll](docs/test-batch-writer.md)
+trennt die 99 ausgeführten Prüfungen von noch fehlenden Container-Messwerten.
+Es gibt keinen bestandenen S1–S8-Gesamtlauf.
+Das [Prüfskript](scripts/test-batch-writer.ps1) ist für einen frischen Testklon ohne
+persönliche `.env` und ohne bestehendes `chat-net` oder Testvolumes vorbereitet:
 `powershell -NoProfile -File scripts/test-batch-writer.ps1`.
+Es nutzt `.env.example`, einen kurzlebigen Python-Client im internen Netz und
+bewahrt Messdaten privat unter `Erklärungen`. Sein Docker-Ablauf ist noch nicht
+validiert; Voraussetzungen und Einschränkungen stehen im Prüfprotokoll.
 
 S3 prüft 1'000 angenommene IDs innerhalb von 60 Sekunden. S4 misst für 1'000 bereits
 wartende Nachrichten höchstens 100 DB-Transaktionen; Prefetch 500 allein beweist

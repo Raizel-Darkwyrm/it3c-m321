@@ -6,6 +6,7 @@ Als Vorbild dient [plan-chat-service.md](plan-chat-service.md): kleine Aufgaben,
 
 ## Arbeitsweise und Git-Reihenfolge
 
+- **Aktualisierung mit Aufgabe 21 (02.10.2026):** Der ausdrücklich beauftragte Abnahmeabschnitt holt die zurückgestellten Tests nach. Tests ohne Docker werden wieder ausgeführt und fehlende Integrationstests ergänzt. Bekanntermassen blockierte Docker-Läufe bleiben ohne erneuten Fehlversuch offen. Die folgende Zurückstellung beschreibt die vorherigen Aufgaben, nicht ein dauerhaftes Testverbot.
 - **Benutzerfestlegung ab Aufgabe 14:** Tests werden bis nach den Implementierungsaufgaben zurückgestellt. Vorerst keine neuen Tests schreiben und keine Testläufe starten. Die unten ursprünglich vorgesehenen Testschritte bleiben als Nachholaufträge erhalten; fehlende Testdateien ausdrücklich benennen. Keine vorhandenen Tests deaktivieren. Implementiert bedeutet bis zur späteren Prüfung nicht abgeschlossen und geprüft. Auch Aufgaben, deren Hauptinhalt ein Testnachweis ist, behalten ihren offenen Nachweis; bei ihnen ist später der vereinbarte Testschritt nachzuholen.
 - Dieser Plan wird vor Beginn der Implementierung separat gesichert. Vorgeschlagene Commit-Message: `docs: Umsetzungsplan für batch-writer festlegen`. Das Erstellen dieses Dokuments führt selbst keinen Commit aus.
 - Danach Aufgaben 01 bis 21 in der angegebenen Reihenfolge bearbeiten. Die Nummern beziehen sich auf diesen Plan, nicht auf die bisherigen Gesprächsschritte.
@@ -26,14 +27,14 @@ Diese Liste betrifft bereits bearbeitete Aufgaben; Tests späterer Aufgaben
 sind weiterhin dort geplant. Kein Test wird wegen dieser Markierung deaktiviert.
 Erst nach erfolgreicher Ausführung mit Datum und Ergebnis abhaken.
 
-Aktueller Stand nach Aufgabe 19: Alle Testläufe sind auf Benutzerwunsch bis zum
-gesammelten Testabschnitt zurückgestellt. N1–N14 waren bereits wegen fehlendem
-Docker/Compose offen; N15–N17 enthalten zusätzlich noch zu erstellende Tests,
-N18 die noch nicht ausgeführten Containerprüfungen; N19 die ausstehenden Mengen-
-und Transaktionsmessungen samt noch zu erstellendem Prüfskript.
-Aufgabe 15 wurde beim ausdrücklichen Weitergehen zu Aufgabe 16 nicht bearbeitet
-und bleibt ebenfalls offen. Frühere Fehlversuche unten bleiben als Historie
-erhalten und werden nicht wiederholt, solange die Voraussetzung unverändert fehlt.
+Aktueller Stand nach Aufgabe 21: 91 ausgewählte Writer-Tests und acht ausgewählte
+chat-service-Tests ohne Docker erfolgreich. Alle Writer-Testquellen übersetzbar.
+Die bisher fehlenden Tests aus Aufgaben 14–17 sowie das Prüfskript aus Aufgabe 19
+sind ergänzt; ihre Docker-Ausführung bleibt offen. N1–N19 sind weiterhin nicht
+vollständig nachgewiesen. Aufgabe 15 wurde jetzt im gesammelten Testabschnitt
+nachgeholt, jedoch noch nicht gegen echte Dienste ausgeführt. Frühere datierte
+Bearbeitungsstände unten bleiben als Historie erhalten; der aktuelle Nachweis
+steht in [test-batch-writer.md](test-batch-writer.md).
 Die Tests ohne Docker werden ausdrücklich ausgewählt; das ist kein vollständiger
 Root- oder Writer-Testlauf. Es wurden keine Tests per Annotation oder POM deaktiviert.
 
@@ -153,10 +154,10 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   Fünf ergänzende Prüfungen ohne Docker belegen bereits, dass ein ungültiger
   Eintrag den gültigen Puffer und dessen erste 200-ms-Frist nicht verändert.
 
-- [ ] **N15 – Aufgabe 14: Kanalverlust und Stop prüfen; Tests noch erstellen.**
-  Auf Benutzerwunsch weder Testdatei angelegt noch Tests oder Build ausgeführt.
-  Zuerst `test/messaging/ConsumerLifecycleIntegrationTest.java` erstellen und
-  Unit-Tests für die neuen Zustandsübergänge ergänzen. Erst danach:
+- [ ] **N15 – Aufgabe 14: Kanalverlust und Stop prüfen.**
+  In Aufgabe 21 `test/messaging/ConsumerLifecycleIntegrationTest.java` erstellt
+  und acht zusätzliche Consumer-Prüfungen ohne Docker erfolgreich ausgeführt.
+  Echte Integration und Container-Stop-Dauer bleiben offen. Nachholen:
   `mvn -pl batch-writer test '-Dtest=ConsumerLifecycleIntegrationTest,MessageConsumerTest,BatchRuleTest'`.
   Fälle: Kanal nach Commit vor erstem bzw. nach einzelnen ACKs schliessen;
   Wiederzustellung mit genau einer DB-Zeile je ID und ohne DLQ-Zuwachs. Alte
@@ -169,9 +170,9 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   nur wegen Stop. Tatsächliche Stop-Dauer samt Kanalschluss messen und Blockaden
   ausschliessen. Anschliessend vorhandene Tests und Root-Testlauf nachholen.
 
-- [ ] **N16 – Aufgabe 16: Zwei Writer und konkurrierende Inserts; Tests noch erstellen.**
-  Auf Benutzerwunsch zurückgestellt. `test/service/MultipleWritersIntegrationTest.java`
-  ist noch nicht angelegt. Zwei getrennte Anwendungskontexte mit eigenen AMQP-
+- [ ] **N16 – Aufgabe 16: Zwei Writer und konkurrierende Inserts.**
+  `test/service/MultipleWritersIntegrationTest.java` in Aufgabe 21 erstellt und
+  übersetzt, noch nicht ausgeführt. Zwei getrennte Anwendungskontexte mit eigenen AMQP-
   und DB-Verbindungen starten, dieselbe Queue und Datenbank verwenden. Genau zwei
   Consumer nachweisen, 1'000 neue eindeutige IDs senden und binnen 60 Sekunden
   alle IDs genau einmal gespeichert, ready/unacknowledged null und keine neuen
@@ -185,8 +186,8 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   Die spätere Zwei-Container-Prüfung bleibt Aufgabe 18/21. Vor der gemeinsamen
   Abnahme auch Aufgabe 15 und die offenen Lebenszyklusnachweise aus N15 nachholen.
 
-- [ ] **N17 – Aufgabe 17: Datenbankausfall mit zwei Writern.** Testdatei noch
-  erstellen; vollständiger Nachholauftrag im Statusabschnitt von Aufgabe 17.
+- [ ] **N17 – Aufgabe 17: Datenbankausfall mit zwei Writern.** Testdatei in
+  Aufgabe 21 erstellt und übersetzt; Nachholauftrag im Statusabschnitt von Aufgabe 17.
   Keine Ausführung erfolgt, insbesondere kein Nachweis der 90-Sekunden-Frist.
 - [ ] **N18 – Aufgabe 18: Images, Frischstart, Skalierung und Datenerhalt.**
   Auf Benutzerwunsch noch nicht ausgeführt; Docker ist weiterhin nicht verfügbar.
@@ -205,8 +206,9 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   Testnachweis. Keine bestehenden Benutzer-Volumes löschen oder `.env` überschreiben.
 
 - [ ] **N19 – Aufgabe 19: HTTP-Mengen und Transaktionsgrenze messen.**
-  Prüfskript `scripts/test-batch-writer.ps1` und Messprotokoll
-  `docs/test-batch-writer.md` noch erstellen; keine Messung ausgeführt.
+  Prüfskript `scripts/test-batch-writer.ps1` und vorläufiges Prüfprotokoll
+  `docs/test-batch-writer.md` in Aufgabe 21 erstellt; keine Docker-Messung ausgeführt.
+  Das Skript verwendet einen temporären internen Python-Client aus `scripts/`.
   Nach Spezifikation 19.4 pro Szenario neue Raum-ID verwenden, 1'000 erfolgreiche
   HTTP-Annahmen mit eindeutigen IDs nachweisen und binnen 60 Sekunden nach der
   letzten Annahme alle IDs samt Inhalt gespeichert sowie ready/unacknowledged null erwarten.
@@ -580,9 +582,15 @@ und Diff-Sichtprüfung, keine Aussage über bestandenes Laufzeitverhalten. Die
 
 - [ ] Abgeschlossen und geprüft
 
+Aktualisierung in Aufgabe 21: `test/messaging/DuplicateMessageIntegrationTest.java`
+erstellt und übersetzt. Paket `messaging` erlaubt für den nachweislich gemeinsamen
+Stapel den vorhandenen Konstruktor mit kontrollierter Zeit; Produktionscode bleibt
+unverändert. Rohes JSON, gleicher Stapel, Wiederholung nach Commit, neue Nachbar-ID
+und optionaler Producer-Typheader sind vorbereitet. Docker-Ausführung offen.
+
 1. **Ziel:** Genau das headerarme Duplikatszenario des Auftrags bestehen.
 2. **Warum kommt dieser Schritt jetzt?** Nach Kanal-Recovery muss auch der gesamte Weg von JSON bis ACK bei erneuter Lieferung stimmen.
-3. **Welche Dateien werden verändert?** Neu `test/service/DuplicateMessageIntegrationTest.java`; Fehlerkorrekturen nur an den unmittelbar betroffenen Decoder-/Persistenz-/Consumer-Dateien.
+3. **Welche Dateien werden verändert?** Neu `test/messaging/DuplicateMessageIntegrationTest.java`; Fehlerkorrekturen nur an den unmittelbar betroffenen Decoder-/Persistenz-/Consumer-Dateien.
 4. **Welcher Test wird zuerst geschrieben oder ausgeführt?** `mvn -pl batch-writer test -Dtest=DuplicateMessageIntegrationTest`: denselben rohen UTF-8-Body zweimal direkt per AMQP, nur `content_type=application/json`; kein Producer-Konverter, kein HTTP für diese Duplikate.
 5. **Was erwarten wir vor der Implementierung?** Einzelkomponenten sind geprüft; der exakte S5-Nachweis fehlt und kann bereits beim ersten Lauf grün sein.
 6. **Was implementieren wir?** Testfälle innerhalb eines Stapels, nach vorherigem Commit und gemischt mit einer neuen ID. Inhalt und ID unverändert vergleichen, null Insert-Zähler als Erfolg behandeln, Queue-Zustände prüfen.
@@ -719,11 +727,22 @@ Das zurückgestellte Messprotokoll aus Aufgabe 19 wurde nicht vorzeitig angelegt
 
 - [ ] Abgeschlossen und geprüft
 
+Prüfstand 02.10.2026: Teilabnahme. 91 Writer- und acht chat-service-Prüfungen ohne
+Docker erfolgreich, neue Integrationstestdateien übersetzbar. Fehlende Nachweise
+aus 14–17 vorbereitet. Prüfskript mit internem Python-Client für S1–S7 und
+automatische S8-Teilprüfungen angelegt; Syntax und einzelne Hilfsfunktionen geprüft.
+PowerShell-Fehler bei `${id}:`, JSON-Array-Übernahme, UTF-8-Kodierung und der
+Behandlung von stderr-Warnungen wurden
+gezielt korrigiert und erneut geprüft. Keine Produktionscodeänderung erforderlich.
+Docker fehlt weiterhin: kein Root-Gesamtlauf, keine Image-Builds, keine echten
+Integrationstests oder Compose-Messungen. Vollständiges manuelles S8-Review offen.
+Messwerte werden nicht erfunden. Details und Befehle: [Prüfprotokoll](test-batch-writer.md).
+
 1. **Ziel:** Alle Szenarien in der offiziellen Reihenfolge und auf demselben Stack nachvollziehbar abnehmen.
-2. **Warum kommt dieser Schritt jetzt?** Erst jetzt sind Modul, Tests, Image, Stack, Messungen und Dokumentation vollständig vorhanden.
+2. **Warum kommt dieser Schritt jetzt?** Die Implementierungsaufgaben sind bearbeitet; jetzt werden die zurückgestellten Tests ergänzt und verfügbare Nachweise ausgeführt. Fehlende Docker-Infrastruktur verhindert weiterhin die Gesamtabnahme.
 3. **Welche Dateien werden verändert?** `scripts/test-batch-writer.ps1` um vollständigen Ablauf ergänzen, `docs/test-batch-writer.md` mit realen Messwerten vervollständigen; bei konkreten Befunden ausschliesslich betroffene Dateien korrigieren und relevante Prüfungen wiederholen.
 4. **Welcher Test wird zuerst geschrieben oder ausgeführt?** `mvn clean test` in der Wurzel, Testberichte kontrollieren. Anschliessend frischen Testklon mit `.env.example` verwenden und S2–S8 anhand Spezifikation 19 durchführen. Das Prüfskript erhält die noch fehlenden überprüfbaren S2-/S5-/S6-/S7-Kontrollen, ohne die laufenden Daten zu löschen. S8 zusätzlich manuell prüfen.
-5. **Was erwarten wir vor der Implementierung?** Einzelne Szenarien sind belegt, ihre aufeinanderfolgende Ausführung mit bestehenbleibenden Daten und zwei Writern bei S7 noch nicht.
+5. **Was erwarten wir vor der Implementierung?** Einzelne Prüfungen ohne Docker sind historisch belegt; mehrere Testdateien und der vollständige Durchlauf mit bestehenbleibenden Daten fehlen noch. Es wird kein bereits bestandener Integrationsnachweis vorausgesetzt.
 6. **Was implementieren wir?** Prüfablauf und ehrliches Protokoll: erwarteter/gemessener Wert, Dauer, Ergebnis und Nachweis pro Szenario. S5 rohe JSON-Duplikate nur mit `content_type`; S6 zwei Consumer; S7 beide weiterbetreiben, DB nach 15 Sekunden starten, 300 IDs binnen 90 Sekunden DB/DLQ zuordnen und beide Writer danach prüfen. S8 Streams, Kommentare und `.env` prüfen. Keine Tag-/Push-Automatik im Testskript.
 7. **Was erwarten wir danach?** S1–S8 nachweislich bestanden oder konkrete offene Fehler ausdrücklich benannt. Für den erfolgreichen Abschluss: alle acht bestanden, Spec/Plan/Code/Tests vorhanden, Kommentare vollständig, `git diff --check` sauber, `git ls-files -- .env` leer, privater Erklärungsordner weiterhin ignoriert. Die finale geprüfte Codeversion wird im Protokoll eindeutig angegeben; der Protokoll-Commit darf anschliessend nur Prüfdokumentation bzw. Planstatus ergänzen. Eine nachträgliche Codekorrektur erfordert neue passende Nachweise.
 8. **Welches Bewertungsszenario wird vorbereitet oder erfüllt?** S1–S8 vollständig nachzuweisen; zusätzliche Review-Vorbereitung anhand eigener Codezeilen.

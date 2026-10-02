@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -28,6 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.awaitility.Awaitility.await;
 
 /** Misst echte Fehlerpfade einschliesslich Verbindungsbeschaffung und prüft anschliessende Erholung. */
 @Testcontainers
@@ -101,9 +103,12 @@ class DatabaseAttemptTimeoutIntegrationTest {
                     """);
             List<ChatMessage> messages = testBatch();
             assertBoundedFailure(service, messages);
-            // Die alte Sitzung muss beendet sein; andernfalls hängt dieser DDL-Aufruf an ihrer Sperre.
-            jdbc.execute("DROP TRIGGER delay_commit_trigger ON public.message");
-            assertNoRows(jdbc);
+            // Socket-Abbruch und serverseitige Bereinigung sind nicht gleichzeitig abgeschlossen.
+            await().ignoreExceptions().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
+                jdbc.execute("DROP TRIGGER IF EXISTS delay_commit_trigger ON public.message");
+            });
+            // Ein verlorenes Commit-Ergebnis kann trotzdem eine gespeicherte Zeile hinterlassen.
+            // Die Wiederholung muss in beiden Fällen erfolgreich und ohne Doppelzeile sein.
             service.persist(messages);
             Integer count = jdbc.queryForObject("SELECT count(*) FROM public.message", Integer.class);
             assertEquals(1, count);

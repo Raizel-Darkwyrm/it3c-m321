@@ -17,6 +17,7 @@ import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.utility.MountableFile;
 
 import java.net.URI;
+import java.net.ServerSocket;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -28,10 +29,12 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -51,10 +54,25 @@ public class WriterTestStack implements AutoCloseable {
 
     /** Jeder Test erhält isolierte Dienste und das unveränderte produktive Schema. */
     public WriterTestStack() throws Exception {
+        this(false);
+    }
+
+    /** Der Ausfalltest braucht dieselbe Host-Port-Zuordnung auch nach einem Docker-Neustart. */
+    public WriterTestStack(boolean stablePostgresPort) throws Exception {
         String moduleDirectory = System.getProperty("basedir");
         Path script = Path.of(moduleDirectory, "..", "postgres", "init", "001-create-message.sql");
         MountableFile initFile = MountableFile.forHostPath(script);
         postgres = new PostgreSQLContainer<>("postgres:16");
+        if (stablePostgresPort) {
+            // Einen freien Testport wählen und explizit binden; keine Produktionsports veröffentlichen.
+            ThreadLocalRandom random = ThreadLocalRandom.current();
+            int candidate = random.nextInt(20000, 30000);
+            try (ServerSocket socket = new ServerSocket(candidate)) {
+                int port = socket.getLocalPort();
+                List<String> bindings = List.of(port + ":5432");
+                postgres.setPortBindings(bindings);
+            }
+        }
         postgres.withCopyFileToContainer(initFile, "/docker-entrypoint-initdb.d/001-create-message.sql");
         rabbitMq = new RabbitMQContainer("rabbitmq:3.13-management");
         rabbitMq.withEnv("RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS", "-rabbit collect_statistics_interval 100");
@@ -148,9 +166,7 @@ public class WriterTestStack implements AutoCloseable {
     /** Vergleicht alle Felder und Queue-Zähler; gespeicherte Zeilen allein beweisen kein ACK. */
     public void assertCompleted(List<ChatMessage> messages, int consumers, Duration limit) {
         await().pollInterval(Duration.ofMillis(200)).atMost(limit).untilAsserted(() -> {
-            for (ChatMessage message : messages) {
-                assertStored(message);
-            }
+            assertStored(messages);
             assertQueue("chat.persist", 0, 0, consumers);
             JsonNode state = management("queues/%2F/chat.persist", null);
             JsonNode statistics = state.path("message_stats");
@@ -162,7 +178,45 @@ public class WriterTestStack implements AutoCloseable {
 
     /** Die unabhängige Verbindung liest nur committed Werte und prüft auch deren Unverändertheit. */
     public void assertStored(ChatMessage message) {
-        Map<String, Object> row = database.queryForMap("SELECT * FROM message WHERE id = ?", message.id());
+        UUID id = message.id();
+        List<Map<String, Object>> rows = database.queryForList("SELECT * FROM message WHERE id = ?", id);
+        // Eine noch fehlende Zeile ist beim Polling eine unerfüllte Erwartung, kein sofortiger Abbruch.
+        int rowCount = rows.size();
+        assertEquals(1, rowCount);
+        Map<String, Object> row = rows.getFirst();
+        assertStoredFields(message, row);
+    }
+
+    /** Eine Sammelabfrage vermeidet tausend Verbindungsaufbauten innerhalb der Prüfungsfrist. */
+    public void assertStored(List<ChatMessage> messages) {
+        List<String> placeholders = new ArrayList<>();
+        List<UUID> ids = new ArrayList<>();
+        for (ChatMessage message : messages) {
+            placeholders.add("?");
+            ids.add(message.id());
+        }
+        String parameters = String.join(",", placeholders);
+        String sql = "SELECT * FROM message WHERE id IN (" + parameters + ")";
+        Object[] arguments = ids.toArray();
+        List<Map<String, Object>> rows = database.queryForList(sql, arguments);
+        int expectedCount = messages.size();
+        int actualCount = rows.size();
+        assertEquals(expectedCount, actualCount);
+        Map<UUID, Map<String, Object>> byId = new HashMap<>();
+        for (Map<String, Object> row : rows) {
+            UUID id = (UUID) row.get("id");
+            byId.put(id, row);
+        }
+        for (ChatMessage message : messages) {
+            UUID id = message.id();
+            Map<String, Object> row = byId.get(id);
+            assertTrue(row != null, "Expected message must be present");
+            assertStoredFields(message, row);
+        }
+    }
+
+    /** Beide Abfragewege vergleichen dieselben sechs unveränderten Vertragsfelder. */
+    private void assertStoredFields(ChatMessage message, Map<String, Object> row) {
         assertEquals(message.id(), row.get("id"));
         assertEquals(message.roomId(), row.get("room_id"));
         assertEquals(message.senderId(), row.get("sender_id"));
@@ -176,7 +230,9 @@ public class WriterTestStack implements AutoCloseable {
     /** Die Management-Statistik muss alle Felder liefern; fehlende Werte sind kein Null-Erfolg. */
     public void assertQueue(String name, int ready, int unacknowledged, int consumers) throws Exception {
         JsonNode state = management("queues/%2F/" + name, null);
-        int actualReady = state.path("messages_ready").asInt(-1);
+        // Passive Deklaration liest die aktuelle Queue-Tiefe statt verzögerter Management-Statistik.
+        AMQP.Queue.DeclareOk queue = publisher.queueDeclarePassive(name);
+        int actualReady = queue.getMessageCount();
         int actualUnacknowledged = state.path("messages_unacknowledged").asInt(-1);
         int actualConsumers = state.path("consumers").asInt(-1);
         assertEquals(ready, actualReady);

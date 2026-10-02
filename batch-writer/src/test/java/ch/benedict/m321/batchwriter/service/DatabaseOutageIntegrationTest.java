@@ -32,7 +32,7 @@ class DatabaseOutageIntegrationTest {
     /** DB/DLQ müssen alle Ausfall-IDs enthalten; anschliessend muss jeder Writer erneut committen. */
     @Test
     void recoversBothWritersAfter15SecondOutage(CapturedOutput output) throws Exception {
-        try (WriterTestStack stack = new WriterTestStack()) {
+        try (WriterTestStack stack = new WriterTestStack(true)) {
             List<UUID> instances = startAndWarmWriters(stack);
             List<ChatMessage> messages = stack.messages(300);
             ChatMessage firstMessage = messages.getFirst();
@@ -111,9 +111,7 @@ class DatabaseOutageIntegrationTest {
             assertTrue(remaining > 0);
             Duration limit = Duration.ofNanos(Math.min(remaining, 10_000_000_000L));
             await().pollInterval(Duration.ofMillis(200)).atMost(limit).untilAsserted(() -> {
-                for (ChatMessage message : controls) {
-                    stack.assertStored(message);
-                }
+                stack.assertStored(controls);
                 stack.assertQueue("chat.persist", 0, 0, 2);
             });
             String allOutput = output.getAll();

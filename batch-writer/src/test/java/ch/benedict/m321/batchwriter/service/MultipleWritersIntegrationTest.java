@@ -41,11 +41,13 @@ class MultipleWritersIntegrationTest {
         try (WriterTestStack stack = new WriterTestStack()) {
             ConfigurableApplicationContext firstContext = stack.startWriter(false);
             ConfigurableApplicationContext secondContext = stack.startWriter(false);
-            MessageRepository firstRepository = firstContext.getBean(MessageRepository.class);
-            MessageRepository secondRepository = secondContext.getBean(MessageRepository.class);
+            // Echte Repositories mit den Kontext-Verbindungen, ohne einen Spring-Proxy erneut zu mocken.
+            JdbcTemplate firstDatabase = firstContext.getBean(JdbcTemplate.class);
+            JdbcTemplate secondDatabase = secondContext.getBean(JdbcTemplate.class);
+            MessageRepository firstRepository = new MessageRepository(firstDatabase);
+            MessageRepository secondRepository = new MessageRepository(secondDatabase);
             MessageRepository first = spy(firstRepository);
             MessageRepository second = spy(secondRepository);
-            JdbcTemplate secondDatabase = secondContext.getBean(JdbcTemplate.class);
             CountDownLatch inserted = new CountDownLatch(1);
             AtomicInteger secondPid = new AtomicInteger();
             AtomicBoolean overlapObserved = new AtomicBoolean();

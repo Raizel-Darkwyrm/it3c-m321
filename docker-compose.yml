@@ -33,7 +33,8 @@ services:
     networks:
       - chat-net
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      # Ein erreichbarer Erlang-Knoten allein garantiert noch keinen bereiten AMQP-Listener.
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q check_port_connectivity"]
       interval: 5s
       timeout: 5s
       retries: 12

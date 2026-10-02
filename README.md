@@ -27,8 +27,10 @@ Stand 02.10.2026 nach Docker-Nachholung: Der vollständige Root-Testlauf besteht
 mit 141 Tests einschliesslich echter RabbitMQ-/PostgreSQL-Integrationstests.
 Image-Build, Frischstart und S2–S7 wurden praktisch geprüft; S4 benötigt bei
 1.000 wartenden Nachrichten 6 gemessene DB-Transaktionen. Die Compose-Prüfung
-erfolgte nach Skriptkorrekturen in Fortsetzungsläufen. Das manuelle S8-Review bleibt
-offen. Details und Grenzen stehen im [Prüfprotokoll](docs/test-batch-writer.md).
+erfolgte nach Skriptkorrekturen in Fortsetzungsläufen. S8 wurde manuell/statisch
+geprüft und für die vier Kriterien bestanden: keine Streams, Kommentare über allen
+eigenen Klassen und Methoden, `.env` nicht getrackt. Details und Grenzen stehen
+im [Prüfprotokoll](docs/test-batch-writer.md).
 
 Aus der Projektwurzel, mit laufendem Docker und Compose sowie Java 21/Maven:
 
@@ -57,8 +59,8 @@ des Gesamtsystems gehört später dem Gateway.
 |---|---|---|---|
 | chat-service | Spring Boot 3, Java 21 | Nimmt Nachrichten per `POST /messages` an, legt sie auf Queue und Fanout-Exchange | vorhanden |
 | rabbitmq | RabbitMQ 3.13 | Message Queue zwischen den Services | vorhanden |
-| batch-writer | Spring Boot 3, Java 21, JdbcTemplate | Speichert Nachrichten aus `chat.persist` stapelweise | implementiert; Gesamtnachweis offen |
-| postgres | PostgreSQL 16 | Tabelle `message` für persistierte Nachrichten | Schema und Compose vorhanden; Laufzeitprüfung offen |
+| batch-writer | Spring Boot 3, Java 21, JdbcTemplate | Speichert Nachrichten aus `chat.persist` stapelweise | implementiert; S1–S8 nachgewiesen, Ablaufgrenzen siehe Prüfprotokoll |
+| postgres | PostgreSQL 16 | Tabelle `message` für persistierte Nachrichten | Schema, Compose-Betrieb, Ausfall/Erholung und Datenerhalt geprüft |
 | keycloak | Keycloak | Login (OIDC) | folgt |
 | web-gateway | nginx | Einziger nach aussen offener Port | folgt |
 | Web-UI | React | Browser-Client | folgt |
@@ -100,7 +102,8 @@ Initialisierungs-Zugangsdaten konfigurieren bestehende Datenvolumes nicht neu.
 
 ## Intern prüfen und zwei Writer betreiben
 
-Die folgenden Diagnosebefehle sind ebenfalls noch nicht am laufenden Stack geprüft.
+Interner Nachrichtenfluss, Queue-Zustand, Schema und Betrieb mit zwei Writern
+wurden im Compose-Stack geprüft; die folgenden Befehle dienen der Diagnose.
 HTTP-Aufrufe erfolgen aus einem temporären Client im Docker-Netz. Das folgende
 PowerShell-Beispiel übergibt den JSON-Body über stdin, damit auch unter Windows
 PowerShell 5.1 die Anführungszeichen erhalten bleiben:
@@ -149,23 +152,29 @@ DB-Erholung verarbeitet neue bzw. noch offene Lieferungen, nicht automatisch die
 
 Logs enthalten Instanzkennung, Stapelgrösse, Versuch und Fehlerziel; sie ersetzen
 keinen Abgleich von IDs, DB-Zeilen und Queue-Zustand. Die Ausfall-, Zeit- und
-Mehrinstanzgarantien müssen noch mit den offenen Tests nachgewiesen werden.
+Mehrinstanzprüfungen wurden mit echten Diensten nachgeholt. Bei S7 wurde
+PostgreSQL nach etwa 15 Sekunden wieder gestartet; beide Writer arbeiteten ohne
+Neustart weiter. Auch der Datenerhalt beim Ersetzen der Infrastrukturcontainer
+wurde bestätigt.
 
 ## Prüfstand für Bewertung 1
 
 Die Abnahmekriterien und konkreten Prüfungen stehen in
 [`docs/spec-batch-writer.md`, Kapitel 19](docs/spec-batch-writer.md#19-abnahmekriterien).
 Die [Nachholliste im Umsetzungsplan](docs/plan-batch-writer.md#offene-prüfungen-zum-nachholen)
-führt die offenen Nachweise. Die zurückgestellten Testdateien einschliesslich
-Aufgabe 15 sind inzwischen ergänzt. Das [vorläufige Prüfprotokoll](docs/test-batch-writer.md)
-trennt die 99 ausgeführten Prüfungen von noch fehlenden Container-Messwerten.
-Es gibt keinen bestandenen S1–S8-Gesamtlauf.
+enthält die historische Zurückstellung und verweist auf die nachgeholten Prüfungen.
+Das [Prüfprotokoll](docs/test-batch-writer.md) dokumentiert den vollständigen
+Maven-Lauf mit 141 Tests, 0 Fehlern, 0 Fehlschlägen und 0 übersprungenen Tests,
+die praktischen Compose-Nachweise für S2–S7 und die bestandene manuelle/statische
+S8-Prüfung. Die Compose-Nachweise stammen aus Fortsetzungsläufen; ein einziger
+ununterbrochener Lauf des endgültigen Abnahmeskripts wird nicht behauptet.
 Das [Prüfskript](scripts/test-batch-writer.ps1) ist für einen frischen Testklon ohne
 persönliche `.env` und ohne bestehendes `chat-net` oder Testvolumes vorbereitet:
 `powershell -NoProfile -File scripts/test-batch-writer.ps1`.
 Es nutzt `.env.example`, einen kurzlebigen Python-Client im internen Netz und
-bewahrt Messdaten privat unter `Erklärungen`. Sein Docker-Ablauf ist noch nicht
-validiert; Voraussetzungen und Einschränkungen stehen im Prüfprotokoll.
+bewahrt Messdaten privat unter `Erklärungen`. Der Docker-Ablauf wurde praktisch
+ausgeführt und gezielt korrigiert; Voraussetzungen und Einschränkungen stehen
+im Prüfprotokoll.
 
 S3 prüft 1'000 angenommene IDs innerhalb von 60 Sekunden. S4 misst für 1'000 bereits
 wartende Nachrichten höchstens 100 DB-Transaktionen; Prefetch 500 allein beweist

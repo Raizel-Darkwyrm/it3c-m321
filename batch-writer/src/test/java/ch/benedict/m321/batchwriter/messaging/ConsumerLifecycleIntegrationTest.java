@@ -98,7 +98,11 @@ class ConsumerLifecycleIntegrationTest {
                         realChannel.abort();
                         throw new IOException("Channel interrupted after commit");
                     }
-                    return invocation.callRealMethod();
+                    // Channel ist ein Interface: erfolgreiche ACKs ausdrücklich am echten Kanal ausführen.
+                    long deliveryTag = invocation.getArgument(0);
+                    boolean multiple = invocation.getArgument(1);
+                    realChannel.basicAck(deliveryTag, multiple);
+                    return null;
                 }).when(intercepted).basicAck(anyLong(), anyBoolean());
                 MessageDecoder decoder = new MessageDecoder();
                 AtomicLong time = new AtomicLong();
@@ -113,6 +117,9 @@ class ConsumerLifecycleIntegrationTest {
                     Runnable deadline = timer.getValue();
                     time.set(200_000_000L);
                     deadline.run();
+                    // Belegt, dass der Kanal erst am vorgesehenen ACK und nicht durch einen Testfehler schliesst.
+                    int acknowledgementAttempts = attempts.get();
+                    assertEquals(successfulAcks + 1, acknowledgementAttempts);
                     await().atMost(Duration.ofSeconds(10)).until(() -> !realChannel.isOpen());
                 } finally {
                     consumer.shutdown();

@@ -697,8 +697,16 @@ Die unten genannte Test-Commit-Message bleibt für die spätere Umsetzung vorges
 
 - [ ] Abgeschlossen und geprüft
 
+Stand 02.10.2026: README an den implementierten Stand angepasst: Variablen,
+Startbefehle, interne Diagnose, Skalierung, Schema/Volumes und DLQ-Verhalten.
+Nur Dokumentations- und Diff-Sichtprüfung; kein Build, Test oder Containerstart.
+Der Nachvollzug aus einem frischen Testklon bleibt offen. Nachholen: README-Befehle
+mit Beispielkonfiguration ausführen, HTTP 202 samt anschliessender Persistenz,
+Schema und genau zwei Consumer prüfen; Ergebnisse erst dann protokollieren.
+Das zurückgestellte Messprotokoll aus Aufgabe 19 wurde nicht vorzeitig angelegt.
+
 1. **Ziel:** Den tatsächlich erreichten Stand und die Prüfung aus einem Klon verständlich dokumentieren.
-2. **Warum kommt dieser Schritt jetzt?** Start- und Prüfabläufe wurden ausgeführt; die README beschreibt überprüftes Verhalten statt einen vorweggenommenen Erfolg.
+2. **Warum kommt dieser Schritt jetzt?** Die Containerkonfiguration ist vorhanden. Wegen der zurückgestellten Tests beschreibt die README den implementierten Stand und den vorgesehenen Ablauf ausdrücklich ohne Laufzeit-Erfolgsbehauptung.
 3. **Welche Dateien werden verändert?** `README.md`; `docs/test-batch-writer.md` nur zur Ergänzung der reproduzierbaren Prüfvoraussetzungen.
 4. **Welcher Test wird zuerst geschrieben oder ausgeführt?** Aktuelle README gegen den laufenden Stack prüfen; danach Startanleitung mit `.env.example` in einem frischen Testklon nachvollziehen und sämtliche angegebenen Pfade/Befehle kontrollieren.
 5. **Was erwarten wir vor der Implementierung?** README bezeichnet Writer/Postgres noch als ausstehend und erklärt deren Konfiguration/Fehlerziel nicht.

@@ -1,5 +1,82 @@
 # Prüfprotokoll batch-writer – Aufgabe 21
 
+## Docker-Nachholung vom 02.10.2026 – aktueller Stand
+
+**S1–S7 in vollständigen Maven- und anschliessenden Compose-/Fortsetzungsläufen
+praktisch nachgewiesen. S8 bleibt wegen des manuellen Stilreviews offen.**
+Die historischen Aussagen unterhalb dieses Abschnitts beschreiben den früheren
+Stand ohne Docker und werden durch diese Ergebnisse ersetzt.
+
+Umgebung: Docker Desktop mit Engine 29.8.1 (Linux), Compose v5.5.1,
+Windows PowerShell 5.1, Java 21.0.10 und Maven 3.9.11. Docker wurde über seinen
+Installationspfad in den Prozess-PATH aufgenommen. Keine globale Git- oder
+PowerShell-Richtlinie verändert. Testklon ohne persönliche `.env`; neue Volumes.
+
+| Prüfung | Tatsächliches Ergebnis |
+|---|---|
+| S1: Root `mvn clean test` auf `f6644fe` | **141 Tests erfolgreich**, davon 14 chat-service und 127 batch-writer; keine Fehler/Fehlschläge/Skips |
+| S2: Image-Build und frischer Compose-Stack | Vier Dienste, korrektes Schema/PK/Index, gemeinsames `chat-net`, keine Host-Port-Mappings, Consumer verbunden |
+| S3: 1.000 HTTP-Nachrichten | Alle Antwort-IDs und Inhalte innerhalb der 60-Sekunden-Prüfgrenze gespeichert; Eingangsqueue leer |
+| S4: 1.000 wartende Nachrichten | Rohe Transaktionsdifferenz **6**, Ausgangswert 54, Endwert 60; alle IDs gespeichert; Grenze 100 eingehalten |
+| S5: identischer roher Body zweimal | Genau eine unveränderte Zeile, beide Lieferungen bestätigt, DLQ leer |
+| S6: zwei Writer | Zwei Container/Consumer, alle 1.000 IDs gespeichert, keine neuen DLQ-Einträge |
+| S7: PostgreSQL-Ausfall | Neustart nach **15,1082155 Sekunden** angestossen; alle 300 IDs binnen 90 Sekunden DB/DLQ zugeordnet; beide ursprünglichen Writer danach erfolgreich, ohne Neustart |
+| Echte Integrationstests | Duplikate, ungültige Bodies/DLQ, Kanalverlust/Stop, Batch-Commit/Rollback, Fünf-Sekunden-Grenzen, parallele Writer und DB-Ausfall bestanden |
+| Datenerhalt nach Container-Ersatz | PostgreSQL und RabbitMQ nach S7 mit denselben Volumes ersetzt: **4.381 Zeilen** und vollständige Inhaltsprüfsumme unverändert; **220 DLQ-Nachrichten** erhalten; Eingangsqueue leer |
+| Stop der zwei untätigen Writer | Zusammen **0,778 Sekunden**; kein Nachweis einer maximalen Stop-Dauer unter beliebiger Last |
+| S8 | Keine getrackte `.env`, Ignore-Regel wirksam, keine Streams; vollständige manuelle Stilfreigabe weiterhin offen |
+
+### Gefundene Ursachen und gezielte Korrekturen
+
+- `ed7d629`: Asynchrone DB-Prüfung wartet auf eine noch fehlende Zeile; mehrere
+  Kontrollnachrichten werden mit einer Sammelabfrage vollständig verglichen.
+  Aktuelle Queue-Tiefe wird passiv beim Broker statt aus verzögerten Statistiken
+  gelesen. ACK- und Unacked-Prüfungen bleiben erhalten.
+- Derselbe Testcommit beseitigt den Mockito-Spy auf einem Spring-Proxy und gibt
+  dem Ausfalltest eine stabile Host-Port-Bindung. Die produktive Compose-Datei
+  veröffentlicht weiterhin keine Ports.
+- Der Commit-Timeout-Test berücksichtigt ein ungewisses Commit-Ergebnis:
+  Client-Timeout bedeutet nicht zwingend serverseitiger Rollback. Nach begrenztem
+  Warten auf serverseitige Bereinigung muss die Wiederholung genau eine Zeile
+  hinterlassen. Die Fünf-Sekunden-Grenze des Schreibaufrufs bleibt unverändert.
+- `f6644fe`: RabbitMQ-Healthcheck prüft laufende Anwendung und Listener.
+  `ping` allein meldete zu früh Bereitschaft; der Writer konnte dadurch beim
+  Queue-Initialisieren abbrechen.
+- Das Abnahmeskript wartet innerhalb der bestehenden Frist auch bei noch
+  fehlender Queue/HTTP 404. Der PostgreSQL-Neustartjob wertet den Docker-Exitcode
+  aus; normale Fortschrittsausgabe auf stderr ist kein Neustartfehler.
+
+### Herkunft und Grenzen der Nachweise
+
+Der erste Root-Lauf fand fünf Writer-Testfehler; danach wurden die Ursachen
+gezielt korrigiert und erneut geprüft. Zwei anschliessende vollständige Root-Läufe
+auf `ed7d629` und `f6644fe` bestanden mit jeweils 141 Tests.
+
+Die Compose-Abnahme ist **kein einziger unterbrechungsfreier Lauf des endgültigen
+Skripts**. Nach Korrektur der Queue-Bereitschaftsprüfung wurden S2–S6 auf demselben
+frisch gestarteten Stack fortgesetzt. S7 wurde nach Korrektur der PowerShell-
+Jobauswertung mit neuen Nachrichten und denselben beiden Writern wiederholt.
+Zwischen S2 und S7 wurden keine Tabellen, Queues oder Volumes geleert. Der
+zusätzliche Container-Ersatz erfolgte erst nach erfolgreichem S7. Die vorhandenen
+220 DLQ-Nachrichten stammen aus den Ausfallprüfungen, nicht aus S5.
+
+Private Belege im Workspace unter `Erklärungen/`:
+
+- `Docker-Nachholung-vollstaendig.log` und `Docker-Nachholung-vollstaendig-2.log`:
+  vollständige Root-Läufe und erste Compose-Startversuche.
+- `Docker-Compose-Fortsetzung.log`: S2–S6 und gemessene S4-Differenz.
+- `Docker-S7-Fortsetzung.log`: erfolgreicher S7-Wiederholungslauf.
+- `Docker-Datenerhalt.txt`: Datenprüfsummen, Queue-Zähler und Stop-Dauer.
+- Testklon `docker-abnahme-20261002/Erklärungen/Schritt 6 Code Beginn/`:
+  `Abnahme-20261002-201456` enthält S2–S6-Resultate und HTTP-Belege;
+  `Abnahme-20261002-201734` enthält S7-Resultate und HTTP-Belege.
+
+Diese privaten Dateien werden nicht committed. Für einen weiteren einzelnen
+Durchlauf des endgültigen Skripts einen neuen Testklon und freie `chat-net`-
+Umgebung verwenden; bestehende Testvolumes nicht ungefragt löschen.
+
+## Historisches Protokoll vor der Docker-Nachholung
+
 Stand: 02.10.2026. **Teilabnahme; S1–S8 nicht vollständig bestanden.**
 Docker/Compose fehlen in der aktuellen Arbeitsumgebung. Bekanntermassen blockierte
 Containerprüfungen wurden gemäss Benutzeranweisung nicht erneut gestartet.

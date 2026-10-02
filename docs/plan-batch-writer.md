@@ -22,6 +22,22 @@ Als Vorbild dient [plan-chat-service.md](plan-chat-service.md): kleine Aufgaben,
 
 ## Offene Prüfungen zum Nachholen
 
+**Aktualisierung 02.10.2026 nach Docker-Installation:** Der vollständige Root-Lauf
+auf `f6644fe` besteht mit 141 Tests (14 Producer, 127 Writer), ohne Fehler oder
+Skips. Die Docker-Integrationstests sind jetzt ausgeführt. S2–S7 wurden im
+Compose-Stack nachgewiesen, S4 mit 6 Transaktionen; Datenerhalt nach Ersatz der
+PostgreSQL-/RabbitMQ-Container und Stop der beiden untätigen Writer sind geprüft.
+Die Abnahme erfolgte wegen gefundener Test-/Skriptfehler in mehreren Läufen.
+Ein einziger ununterbrochener Lauf des final korrigierten Abnahmeskripts sowie
+das vollständige manuelle S8-Review werden damit nicht behauptet.
+Massgeblich ist der aktuelle Abschnitt in [test-batch-writer.md](test-batch-writer.md).
+
+Die folgende datierte Liste bleibt als historische Nachholplanung erhalten.
+Ihre alten Aussagen „Docker fehlt“ und „noch nicht ausgeführt“ gelten für den
+damaligen Stand; die oben genannten Prüfungen sind inzwischen nachgeholt.
+Die umfassenderen Aufgaben werden nicht pauschal abgehakt, solange noch
+manuelle Teilprüfungen oder weitergehende Abnahmebedingungen offen sind.
+
 Stand 01.10.2026: **BLOCKIERT – Docker-/Compose-Umgebung fehlt.**
 Diese Liste betrifft bereits bearbeitete Aufgaben; Tests späterer Aufgaben
 sind weiterhin dort geplant. Kein Test wird wegen dieser Markierung deaktiviert.

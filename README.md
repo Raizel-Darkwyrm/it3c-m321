@@ -23,12 +23,12 @@ Alle Aufgaben werden in **deinem Fork** gelöst. Das Original-Repository bleibt 
 
 ## Bauen, testen, starten
 
-Stand 02.10.2026: Writer und Compose-Konfiguration sind implementiert. Die aktuellen
-Builds, Containerstarts und Integrationstests sind noch nicht vollständig geprüft.
-In Aufgabe 21 wurden 91 Writer- und acht chat-service-Tests ohne Docker erfolgreich
-ausgeführt. Neue Integrationstests sind übersetzbar, aber noch nicht ausgeführt.
-Die folgenden Befehle sind die vorgesehene Anleitung, kein Bericht eines
-erfolgreichen vollständigen Durchlaufs.
+Stand 02.10.2026 nach Docker-Nachholung: Der vollständige Root-Testlauf besteht
+mit 141 Tests einschliesslich echter RabbitMQ-/PostgreSQL-Integrationstests.
+Image-Build, Frischstart und S2–S7 wurden praktisch geprüft; S4 benötigt bei
+1.000 wartenden Nachrichten 6 gemessene DB-Transaktionen. Die Compose-Prüfung
+erfolgte nach Skriptkorrekturen in Fortsetzungsläufen. Das manuelle S8-Review bleibt
+offen. Details und Grenzen stehen im [Prüfprotokoll](docs/test-batch-writer.md).
 
 Aus der Projektwurzel, mit laufendem Docker und Compose sowie Java 21/Maven:
 

@@ -26,10 +26,11 @@ Diese Liste betrifft bereits bearbeitete Aufgaben; Tests späterer Aufgaben
 sind weiterhin dort geplant. Kein Test wird wegen dieser Markierung deaktiviert.
 Erst nach erfolgreicher Ausführung mit Datum und Ergebnis abhaken.
 
-Aktueller Stand nach Aufgaben 17/18: Alle Testläufe sind auf Benutzerwunsch bis zum
+Aktueller Stand nach Aufgabe 19: Alle Testläufe sind auf Benutzerwunsch bis zum
 gesammelten Testabschnitt zurückgestellt. N1–N14 waren bereits wegen fehlendem
 Docker/Compose offen; N15–N17 enthalten zusätzlich noch zu erstellende Tests,
-N18 die noch nicht ausgeführten Containerprüfungen.
+N18 die noch nicht ausgeführten Containerprüfungen; N19 die ausstehenden Mengen-
+und Transaktionsmessungen samt noch zu erstellendem Prüfskript.
 Aufgabe 15 wurde beim ausdrücklichen Weitergehen zu Aufgabe 16 nicht bearbeitet
 und bleibt ebenfalls offen. Frühere Fehlversuche unten bleiben als Historie
 erhalten und werden nicht wiederholt, solange die Voraussetzung unverändert fehlt.
@@ -203,8 +204,25 @@ kein bestehendes Benutzer-Volume löschen oder eine vorhandene `.env` überschre
   Vor Abnahme auch Maven-Tests nachholen; `-DskipTests` im Dockerfile ist kein
   Testnachweis. Keine bestehenden Benutzer-Volumes löschen oder `.env` überschreiben.
 
+- [ ] **N19 – Aufgabe 19: HTTP-Mengen und Transaktionsgrenze messen.**
+  Prüfskript `scripts/test-batch-writer.ps1` und Messprotokoll
+  `docs/test-batch-writer.md` noch erstellen; keine Messung ausgeführt.
+  Nach Spezifikation 19.4 pro Szenario neue Raum-ID verwenden, 1'000 erfolgreiche
+  HTTP-Annahmen mit eindeutigen IDs nachweisen und binnen 60 Sekunden nach der
+  letzten Annahme alle IDs samt Inhalt gespeichert sowie ready/unacknowledged null erwarten.
+  Für S4 Writer vorher stoppen: genau 1'000 ready, null unacknowledged, null
+  Consumer und noch keine DB-Zeile für den neuen Raum. Nach Vorbereitungs-SQL
+  zwei Sekunden warten, dann xact_commit + xact_rollback als Basis erfassen.
+  Writer starten; im Messfenster nur Queue-Zustand abfragen, kein SQL-Polling.
+  Nach leerer Queue zwei Sekunden warten und Endwert erfassen: rohe Differenz
+  höchstens 100, einschliesslich Nebenverkehr; nichts abziehen oder zurücksetzen.
+  Erst danach alle 1'000 IDs und keinen DLQ-Zuwachs prüfen. Keine garantierten
+  zwei 500er-Stapel annehmen. Ein lokaler 60-Sekunden-Abbruch für S4 dient der
+  Diagnose und ist keine zusätzliche offizielle S4-Frist. Erst nach Skriptanlage:
+  `powershell -NoProfile -File scripts/test-batch-writer.ps1`.
+
 Nach dem Nachholen die Ergebnisse auch in den Prüfständen der Aufgaben 01,
-03, 04, 05, 06, 09, 10, 11, 12, 13, 14, 16, 17 und 18 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
+03, 04, 05, 06, 09, 10, 11, 12, 13, 14, 16, 17, 18 und 19 eintragen. Deren Abschlusskästchen bleiben bis dahin offen.
 
 ## Dateinamen und Testkonventionen
 
@@ -659,11 +677,17 @@ Nur Diff-/Quelltext-Sichtprüfung; N18 bleibt offen und kein S2-/S6-Erfolg behau
 
 - [ ] Abgeschlossen und geprüft
 
+Stand 02.10.2026: Auf Benutzerwunsch als Testaufgabe zurückgestellt. Skript und
+Messprotokoll fehlen noch; keine Tests, Builds oder Messungen ausgeführt.
+N19 hält den Nachholauftrag fest. S3/S4 sind nicht nachgewiesen.
+Dokumentationscommit: `docs: Mengen- und Transaktionsmessung zum Nachholen festhalten`.
+Die unten genannte Test-Commit-Message bleibt für die spätere Umsetzung vorgesehen.
+
 1. **Ziel:** S3 und besonders S4 am echten Compose-Stack reproduzierbar prüfen.
 2. **Warum kommt dieser Schritt jetzt?** Erst mit dem Containerpfad werden tatsächlicher Empfang, Prefetch, Batch-Zeit und Datenbank-Nebenverkehr gemeinsam sichtbar.
 3. **Welche Dateien werden verändert?** Neu `scripts/test-batch-writer.ps1` als temporäre Testclients steuerndes Prüfskript und `docs/test-batch-writer.md` als Messprotokoll; bei Fehlern eng begrenzte Korrekturen an den betroffenen Writer-Dateien. Kein load-generator-Dienst.
 4. **Welcher Test wird zuerst geschrieben oder ausgeführt?** Zuerst die S3-/S4-Befehle aus Spezifikation 19.4–19.5 manuell ausführen und Werte festhalten. Danach denselben Ablauf über `powershell -NoProfile -File scripts/test-batch-writer.ps1` reproduzierbar machen; aktuelle Skriptstufe deckt zunächst S3/S4 ab.
-5. **Was erwarten wir vor der Implementierung?** Funktionale Tests sind grün; die reale Obergrenze von 100 Transaktionen ist noch nicht belegt. Zwei 500er-Stapel werden nicht vorausgesetzt.
+5. **Was erwarten wir vor der Implementierung?** Die Tests des aktuellen Gesamtstands sind zurückgestellt; die reale Obergrenze von 100 Transaktionen ist nicht belegt. Zwei 500er-Stapel werden nicht vorausgesetzt.
 6. **Was implementieren wir?** Nachvollziehbare Sendeschleifen, neue Raum-ID pro Szenario, Vergleich der angenommenen IDs, Prüfung von ready und unacknowledged, konservative DB-Statistikmessung ohne SQL-Polling im S4-Messfenster. Skript bricht bei verfehlten Kriterien mit Fehler ab und löscht keine Nutzdaten. Nur bei Bedarf Batch-Fortschritt korrigieren; 200-ms-Regel nicht umgehen.
 7. **Was erwarten wir danach?** S3: 1'000 IDs binnen 60 Sekunden gespeichert. S4: vor Writer-Start exakt 1'000 wartend, danach alle gespeichert, Queue leer und gemessene Transaktionsdifferenz höchstens 100. Tatsächliche Werte, Umgebung und Messgrenzen im Protokoll, keine erfundenen Ergebnisse.
 8. **Welches Bewertungsszenario wird vorbereitet oder erfüllt?** S3 und S4 lokal nachgewiesen; Messwerkzeug für Aufgabe 21 vorbereitet.

@@ -71,12 +71,18 @@ function Test-EmptyQueue([int] $Consumers) {
 
 # Alle Wartephasen besitzen eine explizite Frist; kein Test darf endlos grün warten.
 function Wait-Check([scriptblock] $Check, [datetime] $Deadline, [string] $Description) {
+    $lastFailure = ''
     do {
-        $success = & $Check
+        # Broker und Queue können beim Start noch fehlen; die feste Frist gilt trotzdem weiter.
+        try { $success = & $Check }
+        catch {
+            $success = $false
+            $lastFailure = $_.Exception.Message
+        }
         if ($success -and [datetime]::UtcNow -le $Deadline) { return }
         Start-Sleep -Milliseconds 200
     } while ([datetime]::UtcNow -lt $Deadline)
-    throw "Deadline exceeded: $Description"
+    throw "Deadline exceeded: $Description; last error: $lastFailure"
 }
 
 # Die Raum-ID und jede angenommene Nachrichten-ID bleiben als Nachweis im privaten Ergebnisordner erhalten.
@@ -284,7 +290,9 @@ try {
         $remaining = $RestartAt - [datetime]::UtcNow
         if ($remaining.TotalMilliseconds -gt 0) { Start-Sleep -Milliseconds ([int]$remaining.TotalMilliseconds) }
         $started = [datetime]::UtcNow
-        $null = docker compose --env-file .env.example start postgres
+        # Docker schreibt Fortschritt auf stderr; nur der Exitcode entscheidet über den Neustart.
+        $ErrorActionPreference = 'Continue'
+        docker compose --env-file .env.example start postgres 2>&1 | Out-Null
         if ($LASTEXITCODE -ne 0) { throw 'PostgreSQL restart failed' }
         return $started
     }

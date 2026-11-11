@@ -18,6 +18,7 @@ import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /** Prüft die Queue-Lebensdauer über zwei echte, voneinander unabhängige Dienstinstanzen. */
 @Testcontainers
@@ -40,8 +41,14 @@ class DeliveryQueueLifecycleIntegrationTest {
             secondAdmin.initialize();
 
             assertNotEquals(firstQueue.getName(), secondQueue.getName());
-            assertNotNull(firstAdmin.getQueueProperties(firstQueue.getName()));
-            assertNotNull(secondAdmin.getQueueProperties(secondQueue.getName()));
+            await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+                Properties firstProperties = firstAdmin.getQueueProperties(firstQueue.getName());
+                Properties secondProperties = secondAdmin.getQueueProperties(secondQueue.getName());
+                assertNotNull(firstProperties);
+                assertNotNull(secondProperties);
+                assertEquals(1, firstProperties.get(RabbitAdmin.QUEUE_CONSUMER_COUNT));
+                assertEquals(1, secondProperties.get(RabbitAdmin.QUEUE_CONSUMER_COUNT));
+            });
 
             second.close();
 

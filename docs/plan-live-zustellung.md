@@ -254,7 +254,10 @@ Live-Nachricht; ein unbekannter Cursor ergab HTTP 409.
 
 **Commit:** `test: Begrenzten Rückstau und Queue-Abbau nachweisen`
 
-**Geprüft und korrigiert:** _Noch offen._
+**Geprüft und korrigiert:** Am 11.11.2026 zwei echte RabbitMQ-Tests grün. Zwei
+Kontexte hatten je eine Queue und einen Consumer; nach dem Schliessen blieb nur die
+andere Queue. Bei blockierter Verarbeitung blieben 5000 Eingänge auf höchstens 1000
+ready-Nachrichten begrenzt und der Consumer verarbeitete danach Kontrollnachrichten.
 
 ## Aufgabe 9 – Unabhängigkeit von Persistenz
 

@@ -3,6 +3,8 @@ package ch.benedict.m321.batchwriter.messaging;
 import ch.benedict.m321.batchwriter.dto.ChatMessage;
 import ch.benedict.m321.batchwriter.service.BatchWriteService;
 import ch.benedict.m321.batchwriter.service.MessageBatch;
+import ch.benedict.m321.batchwriter.service.WriteOutcome;
+import java.util.Collections;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.ShutdownListener;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,7 +50,11 @@ class MessageConsumerTest {
         writer = mock(BatchWriteService.class);
         UUID instanceId = UUID.randomUUID();
         when(writer.instanceId()).thenReturn(instanceId);
-        when(writer.write(anyList())).thenReturn(true);
+        when(writer.write(anyList())).thenAnswer(invocation -> {
+            List<ChatMessage> messages = invocation.getArgument(0);
+            int count = messages.size();
+            return Collections.nCopies(count, WriteOutcome.STORED);
+        });
         channel = mock(Channel.class);
         when(channel.isOpen()).thenReturn(true);
         scheduler = mock(ScheduledExecutorService.class);
@@ -84,7 +90,7 @@ class MessageConsumerTest {
             int size = messages.size();
             assertEquals(500, size);
             verify(channel, never()).basicAck(anyLong(), anyBoolean());
-            return true;
+            return Collections.nCopies(500, WriteOutcome.STORED);
         }).when(writer).write(anyList());
         for (int i = 1; i <= 500; i++) {
             Message message = message(i);
@@ -142,12 +148,12 @@ class MessageConsumerTest {
         verify(channel, never()).basicAck(anyLong(), anyBoolean());
     }
 
-    /** Ein erschöpfter Schreibablauf führt erst nach seiner Rückkehr zu NACKs für alle Einträge. */
+    /** Infrastrukturfehler geben offene Lieferungen nach dem letzten Versuch zur erneuten Zustellung frei. */
     @Test
-    void rejectsBatchAfterExhaustedAttempts() throws Exception {
+    void requeuesBatchAfterExhaustedAttempts() throws Exception {
         doAnswer(invocation -> {
             verify(channel, never()).basicNack(anyLong(), anyBoolean(), anyBoolean());
-            return false;
+            return List.of(WriteOutcome.RETRY, WriteOutcome.RETRY);
         }).when(writer).write(anyList());
         Message first = message(1);
         Message second = message(2);
@@ -156,8 +162,8 @@ class MessageConsumerTest {
         Runnable timeout = scheduledTimeout();
         time.set(200_000_000L);
         timeout.run();
-        verify(channel).basicNack(1, false, false);
-        verify(channel).basicNack(2, false, false);
+        verify(channel).basicNack(1, false, true);
+        verify(channel).basicNack(2, false, true);
         verify(channel, never()).basicAck(anyLong(), anyBoolean());
     }
 
@@ -372,7 +378,10 @@ class MessageConsumerTest {
             writing.countDown();
             boolean released = release.await(3, TimeUnit.SECONDS);
             assertTrue(released);
-            return committed;
+            if (committed) {
+                return List.of(WriteOutcome.STORED);
+            }
+            return List.of(WriteOutcome.RETRY);
         }).when(writer).write(anyList());
         doAnswer(invocation -> {
             stopping.countDown();
@@ -411,7 +420,7 @@ class MessageConsumerTest {
         doAnswer(invocation -> {
             writing.countDown();
             blocked.await();
-            return true;
+            return List.of(WriteOutcome.STORED);
         }).when(writer).write(anyList());
         Message first = message(1);
         consumer.onMessage(first, channel);
@@ -435,6 +444,48 @@ class MessageConsumerTest {
             blocked.countDown();
             tasks.shutdownNow();
         }
+    }
+
+    /** Positionsbezogene Ergebnisse bestätigen auch doppelte UUIDs jeweils nur mit ihrem eigenen Tag. */
+    @Test
+    void confirmsMixedOutcomesIndividually() throws Exception {
+        List<WriteOutcome> results = List.of(WriteOutcome.STORED, WriteOutcome.INVALID,
+                WriteOutcome.DUPLICATE, WriteOutcome.RETRY);
+        when(writer.write(anyList())).thenReturn(results);
+        for (int i = 1; i <= 4; i++) {
+            Message delivery = message(i);
+            consumer.onMessage(delivery, channel);
+        }
+        Runnable timeout = scheduledTimeout();
+        time.set(200_000_000L);
+        timeout.run();
+        verify(channel).basicAck(1, false);
+        verify(channel).basicNack(2, false, false);
+        verify(channel).basicAck(3, false);
+        verify(channel).basicNack(4, false, true);
+        verify(channel, times(2)).basicAck(anyLong(), eq(false));
+        verify(channel, times(2)).basicNack(anyLong(), eq(false), anyBoolean());
+    }
+
+    /** Nach einem fehlgeschlagenen Einzel-NACK werden frühere ACKs nicht wiederholt und spätere Tags bleiben offen. */
+    @Test
+    void stopsMixedConfirmationsAfterNackFailure() throws Exception {
+        when(writer.write(anyList())).thenReturn(List.of(WriteOutcome.STORED, WriteOutcome.INVALID, WriteOutcome.DUPLICATE));
+        IOException failure = new IOException("Channel lost");
+        doThrow(failure).when(channel).basicNack(2, false, false);
+        for (int i = 1; i <= 3; i++) {
+            Message delivery = message(i);
+            consumer.onMessage(delivery, channel);
+        }
+        Runnable timeout = scheduledTimeout();
+        time.set(200_000_000L);
+        timeout.run();
+        verify(channel).basicAck(1, false);
+        verify(channel).basicNack(2, false, false);
+        verify(channel, never()).basicAck(3, false);
+        verify(channel, times(1)).basicAck(anyLong(), anyBoolean());
+        verify(channel, times(1)).basicNack(anyLong(), anyBoolean(), anyBoolean());
+        verify(channel).abort();
     }
 
     /** Liefert die geplante Aufgabe, damit der Test den Fristablauf ohne Schlafen auslösen kann. */

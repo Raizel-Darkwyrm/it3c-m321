@@ -111,7 +111,7 @@ class MessageConsumerIntegrationTest {
         checkedCommits.set(0);
         doAnswer(invocation -> {
             List<ChatMessage> messages = invocation.getArgument(0);
-            invocation.callRealMethod();
+            Object counts = invocation.callRealMethod();
             // Bindet die Sichtbarkeits- und ACK-Prüfung an den Zeitpunkt vor dem echten Commit.
             TransactionSynchronization check = new TransactionSynchronization() {
                 /** Eine unabhängige Verbindung darf den Insert vor Commit noch nicht sehen. */
@@ -121,7 +121,7 @@ class MessageConsumerIntegrationTest {
                 }
             };
             TransactionSynchronizationManager.registerSynchronization(check);
-            return null;
+            return counts;
         }).when(repository).insertBatch(anyList());
     }
 

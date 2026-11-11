@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ExtendWith(OutputCaptureExtension.class)
 class DatabaseOutageIntegrationTest {
 
-    /** DB/DLQ müssen alle Ausfall-IDs enthalten; anschliessend muss jeder Writer erneut committen. */
+    /** Ein Infrastrukturfehler darf keine gültige Nachricht in die DLQ verschieben; beide Writer müssen sich erholen. */
     @Test
     void recoversBothWritersAfter15SecondOutage(CapturedOutput output) throws Exception {
         try (WriterTestStack stack = new WriterTestStack(true)) {
@@ -61,10 +61,9 @@ class DatabaseOutageIntegrationTest {
                     List<UUID> stored = stack.database.queryForList(
                             "SELECT id FROM message WHERE room_id = ?", UUID.class, roomId);
                     Set<UUID> accounted = new HashSet<>(stored);
-                    Set<UUID> deadLetters = stack.deadLetterIds();
-                    accounted.addAll(deadLetters);
                     assertEquals(expected, accounted);
                     stack.assertQueue("chat.persist", 0, 0, 2);
+                    stack.assertQueue("chat.dlq", 0, 0, 0);
                 });
                 assertRecovered(stack, instances, output);
             } finally {
@@ -87,8 +86,8 @@ class DatabaseOutageIntegrationTest {
             ConfigurableApplicationContext context = stack.startWriter(true);
             BatchWriteService writer = context.getBean(BatchWriteService.class);
             List<ChatMessage> warmup = stack.messages(1);
-            boolean committed = writer.write(warmup);
-            assertTrue(committed);
+            List<WriteOutcome> committed = writer.write(warmup);
+            assertEquals(List.of(WriteOutcome.STORED), committed);
             UUID instance = writer.instanceId();
             instances.add(instance);
         }

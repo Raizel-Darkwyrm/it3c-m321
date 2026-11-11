@@ -26,16 +26,16 @@ public class MessageRepository {
     private final JdbcTemplate jdbcTemplate;
 
     /** Konflikte sind erfolgreiche Wiederholungen; ein Update-Zähler von null ist kein Fehler. */
-    public void insertBatch(List<ChatMessage> messages) {
+    public int[] insertBatch(List<ChatMessage> messages) {
         if (messages.isEmpty()) {
-            return;
+            return new int[0];
         }
         List<Object[]> parameters = new ArrayList<>();
         for (ChatMessage message : messages) {
             Object[] values = parametersFor(message);
             parameters.add(values);
         }
-        jdbcTemplate.batchUpdate(INSERT_SQL, parameters);
+        return jdbcTemplate.batchUpdate(INSERT_SQL, parameters);
     }
 
     /** Werte bleiben SQL-Parameter; Mikrosekunden werden ohne Aufrunden an PostgreSQL übergeben. */

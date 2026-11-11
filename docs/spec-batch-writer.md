@@ -1,6 +1,6 @@
 # Spezifikation: batch-writer – Bewertung 1
 
-Stand: 01.10.2026. Status: Spezifikation zur Besprechung, noch nicht implementiert oder durch einen Testlauf bestätigt. Dieses Dokument beschreibt das Soll-Verhalten, keinen Umsetzungsplan.
+Stand: 11.11.2026. SQL-Fehlerbehandlung nach dem Code-Review präzisiert: Datenfehler werden einzeln isoliert, Infrastrukturfehler bleiben erneut zustellbar. Dieses Dokument beschreibt den Vertrag; historische Abnahmen beziehen sich auf ihren jeweils geprüften Commit.
 
 ## Grundlagen und Verbindlichkeit
 
@@ -151,7 +151,9 @@ JDBC-Batch und Transaktion sind zwei verschiedene Dinge: Der Batch bündelt Oper
 |---|---|---|
 | Stapel erfolgreich committed | Neue IDs gespeichert; bestehende IDs unverändert | Jede zugehörige Lieferung einzeln ACKen |
 | Vorübergehender Schreibfehler, Versuche übrig | Rollback bzw. ungewisser Commit bei Verbindungsabbruch | Noch kein ACK/NACK; Stapel lokal unbestätigt behalten |
-| Dritter Schreibversuch fehlgeschlagen | Kein sicher bestätigter Commit | Jede Lieferung des Stapels einzeln NACKen, `requeue=false` |
+| Drei allgemeine DB-Fehler | Kein sicher bestätigter Commit | Ungeklärte Lieferungen einzeln NACKen, `requeue=true` |
+| Nachrichtenspezifischer SQL-Fehler im Stapel | Gesamtversuch zurückgerollt | Einzelprüfung nach Kapitel 10; noch keine pauschale Ablehnung |
+| Dauerhafter SQL-Datenfehler in Einzeltransaktion | Einzelversuch zurückgerollt | Nur diese Lieferung NACKen, `requeue=false` |
 | Ungültige Nachricht | Kein Insert | Diese Lieferung einzeln NACKen, `requeue=false` |
 | Prozess-/Kanalabbruch | Eventuell noch nicht gespeichert oder bereits committed | Kein ACK mehr auf altem Kanal; RabbitMQ kann unbestätigte Lieferungen erneut zustellen |
 
@@ -167,13 +169,13 @@ Bei einem geordneten Stop werden keine neuen Stapel mehr begonnen. Ein bereits s
 - **Welchen Fehler verhindert das?** Ein ACK für eine hohe Delivery-ID bestätigt nicht versehentlich ältere, noch ungespeicherte Lieferungen mit.
 - **Welches Bewertungsszenario hängt davon ab?** S3, S5, S6 und S7.
 
-Die Gesamtplanung zeigt `NACK mit requeue` bei einem Schreibfehler. Hier wird dieser offene Fehlerpfad bewusst konkretisiert: drei lokale Schreibversuche ohne zwischenzeitliches Requeue, danach endgültiges NACK zur vorhandenen DLQ. So braucht es keinen vermeintlichen Versuchszähler aus dem blossen Redelivery-Flag. Bei Prozessabbruch bleibt die automatische erneute Zustellung erhalten. Eine gemeinsame atomare Transaktion über PostgreSQL und RabbitMQ wird nicht behauptet.
+Allgemeine DB-Fehler erhalten drei lokale Schreibversuche ohne zwischenzeitliches Requeue, danach Requeue der ungeklärten Lieferungen. Der Versuchszähler gilt pro Zustellung und wird nicht aus dem Redelivery-Flag abgeleitet. Die Ergebnisliste folgt der Lieferungsreihenfolge, nicht einer UUID-Map: Auch gleiche UUIDs haben eigene Delivery-Tags. Gespeicherte und bereits vorhandene Nachrichten erhalten nach Commit ein ACK; Datenfehler ein endgültiges NACK; Infrastrukturfehler ein NACK mit Requeue. Nach einem Brokerfehler endet die Bestätigungsschleife, ohne frühere Tags erneut zu bestätigen. Eine gemeinsame atomare Transaktion über PostgreSQL und RabbitMQ wird nicht behauptet.
 
 ## 9. Duplikatbehandlung
 
 Das Insert enthält `ON CONFLICT (id) DO NOTHING`. Ein Konflikt auf `id` wird als erfolgreich behandelter Datensatz gewertet. Ein Stapel, der nur bereits vorhandene IDs enthält, wird ebenfalls committed und danach bestätigt.
 
-Ein Update-Zähler von null für ein durch den Konflikt übersprungenes Insert ist kein Fehler. Die Verarbeitung darf nicht verlangen, dass die Anzahl neu eingefügter Zeilen der Anzahl zugestellter Nachrichten entspricht. Andernfalls würde gerade das erwartete Duplikat aus S5 fälschlich wiederholt oder in die DLQ geschickt.
+Ein Update-Zähler von `0` für ein durch den Konflikt übersprungenes Insert ist kein Fehler. Die Verarbeitung darf nicht verlangen, dass die Anzahl neu eingefügter Zeilen der Anzahl zugestellter Nachrichten entspricht. Andernfalls würde gerade das erwartete Duplikat aus S5 fälschlich wiederholt oder in die DLQ geschickt.
 
 Die erste gespeicherte Zeile bleibt unverändert. Trifft dieselbe ID mit verändertem Inhalt erneut ein, wird sie ebenfalls nicht überschrieben. Es gibt keine vorgelagerte SELECT-Abfrage zur Duplikatprüfung. Duplikate innerhalb desselben Stapels und bei zwei parallelen Instanzen müssen ebenso unschädlich sein.
 
@@ -185,29 +187,33 @@ Die erste gespeicherte Zeile bleibt unverändert. Trifft dieselbe ID mit veränd
 
 At-least-once betrifft die Verarbeitung der Queue-Lieferung. Zwei separate HTTP-Anfragen erzeugen im bestehenden chat-service zwei verschiedene IDs und sind keine Duplikate im Sinne dieser Spezifikation.
 
-## 10. Verhalten bei Datenbankausfall
+## 10. SQL-Datenfehler und Datenbankausfall
 
-Ein Stapel erhält höchstens drei Schreibversuche: Erstversuch plus zwei Wiederholungen. Vor jeder Wiederholung werden 5 Sekunden gewartet. Der nächste Versuch verwendet wieder eine vollständige Transaktion für denselben unveränderten Stapel. Zwischen den Versuchen bleibt er unbestätigt.
+Der erste Versuch schreibt weiterhin den gesamten Stapel in einer gemeinsamen Transaktion. Bei einem SQL-Fehler wird diese Transaktion zurückgerollt, bevor eine Einzelprüfung beginnen darf. `BatchPersistenceService.persist` verwendet bei jedem Aufruf `REQUIRES_NEW`; ein bereits erfolgreicher Einzel-Commit wird deshalb von einem späteren fehlerhaften INSERT nicht zurückgerollt.
 
-Ein einzelner Versuch muss einschliesslich Verbindungsbeschaffung, SQL-Ausführung und Commit nach spätestens 5 Sekunden als erfolgreich oder fehlgeschlagen gelten. Die Implementierung muss dazu die beteiligten Verbindungs-, Socket- und SQL-Zeitgrenzen so abstimmen, dass nicht mehrere unabhängige Wartezeiten unkontrolliert addiert werden. Ein überfälliger Versuch wird beendet; ein neuer Versuch darf nicht parallel zur alten Datenbankarbeit auf derselben Verbindung beginnen. Diese Grenze ist mit dem Ausfalltest nachzuweisen.
+### Nachrichtenspezifische Fehler
 
-Damit erreicht ein Stapel bei erreichbarem Broker normalerweise spätestens nach 25 Sekunden ab dem ersten Schreibversuch einen erfolgreichen Commit oder das Ende des dritten Fehlversuchs: dreimal höchstens 5 Sekunden plus zweimal 5 Sekunden Pause. Eine Prozessunterbrechung setzt den lokalen Versuchszähler zurück; die Grenze ist keine globale Zählung über Neustarts hinweg.
+Nur folgende SQLSTATEs gelten als erkannte Datenfehler: `22001` (Textlänge), `22003` (Zahlenbereich), `22007`/`22008` (Zeitformat/-bereich), `22021` (Zeichen), `22P02` (Textdarstellung), `23502` (NOT NULL), `23514` (CHECK). Ursache und verkettete JDBC-Ausnahmen werden betrachtet. `25P02` allein beweist keinen Datenfehler; als Folge eines erkannten Datenfehlers darf es auftreten. Ein unbekannter Code, eine fehlende SQLSTATE oder ein zusätzlicher Infrastrukturfehler verhindert die Einstufung als dauerhaft ungültig. Transaktionsfehler, insbesondere ein ungewisser Commit oder fehlgeschlagener Rollback, werden konservativ behandelt. Fremdschlüssel-, andere Unique-, Schema-, Deadlock- und Verbindungsfehler führen nicht allein aufgrund ihrer Fehlerklasse zur DLQ.
 
-Die 25 Sekunden sind eine Obergrenzenrechnung für einen bereits aktiven Stapel unter den festgelegten Zeitgrenzen, kein Nachweis für die Verarbeitung aller 300 Nachrichten. Sammeln, wartende Stapel, Wiederherstellung der Datenbankverbindungen und Broker-Aktionen kommen hinzu. Alle drei Versuche können bei sofortigen Verbindungsfehlern schon ungefähr nach zehn Sekunden erschöpft sein, also vor der Wiederherstellung nach 15 Sekunden. Deshalb ist das Fehlerziel DLQ für S7 wesentlich. Ein Spring-Transaktions-Timeout allein gilt nicht als Nachweis der gesamten Fünf-Sekunden-Grenze; auch Verbindungsbeschaffung und Commit dürfen nicht unbegrenzt blockieren.
+Nach einem erkannten Datenfehler wird jede Nachricht des zurückgerollten Stapels in einer getrennten Transaktion gespeichert. Gültige Nachrichten werden committed, Duplikate weiterhin durch `ON CONFLICT (id) DO NOTHING` akzeptiert. Erst ein auch einzeln festgestellter dauerhafter SQL-Datenfehler ergibt `INVALID` und ausschliesslich für diese Lieferung ein NACK ohne Requeue. Es gibt keine vorgelagerte SELECT-Duplikatprüfung.
 
-Nach dem dritten Fehler geht der gesamte noch unbestätigte Stapel mittels NACK ohne Requeue nach `chat.dlq`. Es gibt keine Aufteilung in Einzel-Inserts zur Fehlersuche. Der Writer bleibt aktiv und verarbeitet nachfolgende Lieferungen. Nach PostgreSQL-Wiederkehr müssen neue gültige Nachrichten ohne manuellen Writer-Neustart wieder gespeichert werden können.
+Beispiel: 499 gültige Nachrichten und eine Verletzung einer CHECK-Bedingung führen zuerst zum Rollback des gesamten 500er-Versuchs. Danach erfolgen 499 erfolgreiche Einzel-Commits und ein Einzel-Rollback. Der Consumer bestätigt die 499 gespeicherten Lieferungen und lehnt nur die fehlerhafte Lieferung zur DLQ ab. Für fehlerfreie Stapel bleibt es bei einer gemeinsamen Transaktion; der teurere Einzelpfad ist auf erkannte Datenfehler begrenzt.
 
-**Entscheidung D8:** Drei lokale Versuche mit 5 Sekunden Pause und begrenzter Versuchsdauer; anschliessend DLQ als ausdrückliches Fehlerziel für den gesamten Stapel.
+### Allgemeine und unklare Datenbankfehler
 
-- **Warum machen wir das?** PLANUNG.md nennt drei Fehlversuche. S7 erlaubt ausdrücklich Datenbank oder einen in der Spezifikation festgelegten anderen Ort. Die vorhandene DLQ bietet diesen Ort ohne weitere Infrastruktur.
-- **Welchen Fehler verhindert das?** Endlose Requeue-Schleifen, dauerhaft blockierende Datenbankaufrufe und stilles Verwerfen fehlgeschlagener Nachrichten.
-- **Welches Bewertungsszenario hängt davon ab?** S7; das Verhalten muss zusätzlich als echter Integrationstest vorliegen.
+Ein Schreibauftrag erhält höchstens drei Versuche insgesamt (Erstversuch plus zwei Wiederholungen), jeweils mit fünf Sekunden Pause dazwischen. Bei einem vollständigen PostgreSQL-Ausfall wird derselbe gesamte Stapel wiederholt, nicht jede Nachricht einzeln. Nach drei Fehlern bleibt das Ergebnis `RETRY`; der Consumer sendet NACK mit `requeue=true`. Die Nachrichten bleiben in `chat.persist`, anstatt als ungültig klassifiziert zu werden. Jede erneute Zustellung startet einen neuen begrenzten Wiederholungszyklus. Es gibt somit keine globale Höchstzahl über alle Wiederzustellungen; ein dauerhafter Infrastruktur- oder Schemafehler erfordert Behebung, verursacht aber keine pauschale DLQ-Ablehnung gültiger Daten.
 
-**Bewusste Folge:** Nach einem 15-sekündigen Ausfall dürfen Nachrichten bereits in der DLQ liegen. Sie wandern nicht automatisch zurück in die Datenbank. Auch gültige Nachrichten eines fehlgeschlagenen Stapels können dort landen. Das erfüllt das festgelegte Fehlerziel, garantiert aber keine spätere automatische Speicherung aller gültigen Nachrichten.
+Beginnt der Ausfall erst während der Einzelprüfung, erhält der gerade bearbeitete Einzelauftrag höchstens drei Versuche mit denselben Pausen. Bleiben diese erfolglos, werden für die verbleibenden Nachrichten keine weiteren Einzel-Inserts gestartet. Bereits abgeschlossene Ergebnisse bleiben erhalten; die aktuelle und alle ungeprüften Lieferungen erhalten `RETRY`. Erkannte Datenfehler werden nicht dreimal identisch wiederholt. Die Gesamtzahl der Transaktionen eines isolierten Datenfehler-Stapels ist naturgemäss grösser als drei; die Dreiergrenze gilt je Schreibauftrag, nicht für sämtliche unabhängigen Einzeltransaktionen zusammen.
 
-Für S7 müssen innerhalb von 90 Sekunden ab Beginn des Ausfalls alle 300 eingespeisten Nachrichten-IDs in `message` oder `chat.dlq` nachweisbar sein. `chat.persist` darf dann keine dieser Lieferungen mehr enthalten, auch nicht als unbestätigt. Bei ungewissem Commit kann eine ID bereits in der Datenbank und zusätzlich in der DLQ liegen; die Datenbank enthält dennoch höchstens eine Zeile pro ID. Entscheidend ist die vollständige Vereinigung der IDs, nicht die blosse Summe zweier Zähler.
+Ein Versuch bleibt einschliesslich Verbindungsbeschaffung, SQL und Commit auf fünf Sekunden begrenzt. Pool-, Socket-, SQL- und Abbruchzeitgeber bleiben erhalten. Ein Zyklus mit drei allgemeinen Fehlern benötigt damit unter diesen Grenzen höchstens etwa 25 Sekunden zuzüglich Verarbeitung/Broker-Aktionen. Diese Rechnung ist keine globale Frist über Requeues oder 500 Einzeltransaktionen. Bei einem Stop oder Kanalverlust bleiben noch nicht bestätigte Lieferungen erneut zustellbar. Ein ungewisser Commit darf kein ACK auslösen; eine Wiederholung bleibt durch den Primary Key unschädlich.
 
-Die Wiederherstellung von PostgreSQL wird im Test 15 Sekunden nach dessen Stop angestossen, unabhängig davon, ob der Sender bereits fertig ist. RabbitMQ bleibt in S7 erreichbar. Die Kombination eines Broker-Ausfalls während Dead-Lettering und eines Datenbankausfalls ist kein bewertetes Szenario; dafür wird keine verlustfreie atomare Übergabe versprochen.
+**Entscheidung D8:** Effizienter Gesamtversuch, danach nur bei eindeutigem SQL-Datenfehler getrennte Einzeltransaktionen; allgemeine Fehler dreimal versuchen und anschliessend ungeklärte Lieferungen requeuen.
+
+- **Warum machen wir das?** Eine kaputte Nachricht darf nicht 499 gültige Nachbarn in die DLQ ziehen. Ein DB-Ausfall ist kein Nachweis ungültiger Daten.
+- **Welchen Fehler verhindert das?** Pauschale DLQ-Ablehnung, wirkungslose Einzel-Inserts bei Serverausfall und ACKs ohne sicheren Commit.
+- **Welches Bewertungsszenario hängt davon ab?** S5 (Duplikate), S6 (getrennte Writer), S7 (Ausfall/Erholung); zusätzlicher SQL-Einzelfehler-Test aus dem Code-Review.
+
+Für S7 wird PostgreSQL nach etwa 15 Sekunden wieder gestartet. Alle 300 gültigen Testnachrichten müssen binnen 90 Sekunden in `message` stehen; keine davon darf allein wegen des Ausfalls in `chat.dlq` liegen. Beide ursprünglichen Writer müssen anschliessend ohne manuellen Neustart neue Nachrichten speichern. Bei länger anhaltendem Ausfall bleiben ungeklärte Nachrichten in `chat.persist`. Bereits aus anderen Gründen vorhandene DLQ-Einträge werden nicht automatisch zurückgeführt.
 
 ## 11. Verhalten bei ungültigen Nachrichten
 
@@ -221,7 +227,7 @@ Es gibt keinen positiven ACK vor einer selbst programmierten Neuveröffentlichun
 - **Welchen Fehler verhindert das?** Eine fehlerhafte Nachricht blockiert nicht die Queue und führt nicht zum Verlust eines ansonsten gültigen Stapels.
 - **Welches Bewertungsszenario hängt davon ab?** Ergänzende Fehlerfallspezifikation; S5 darf bei gültigem JSON gerade nicht in diesen Fehlerpfad gelangen. Kein zusätzliches offizielles S-Szenario.
 
-Unerwartete Fehler erst beim Schreiben folgen Kapitel 10. Dazu gehören auch permanente Datenbankprobleme wie ein falsch manuell verändertes Schema. Sie werden mit Fehlergrund protokolliert; nach drei Versuchen landet der betroffene Stapel in der DLQ.
+Fehler erst beim SQL-Schreiben folgen Kapitel 10: erkannte Datenfehler werden isoliert, unbekannte oder allgemeine Fehler begrenzt wiederholt und danach requeued. Ein falsch verändertes Schema ist kein Beweis einer ungültigen Nachricht.
 
 ## 12. Verhalten mit mehreren batch-writer-Instanzen
 
@@ -329,7 +335,8 @@ Log-Meldungen und technische Feldnamen sind gemäss CLAUDE.md Englisch; Kommenta
 | Consumer bereit | INFO | Instanzkennung, Queue, Prefetch, Batch-Grenzen |
 | Stapel committed | INFO | Instanzkennung, Anzahl behandelter Lieferungen, Versuch, Dauer |
 | Schreibversuch fehlgeschlagen | WARN | Instanzkennung, Stapelgrösse, Versuch von drei, Fehlerklasse/SQL-State, nächster Schritt |
-| Versuche erschöpft | ERROR | Instanzkennung, Stapelgrösse, Ziel `chat.dlq`, Fehlergrund |
+| Allgemeine DB-Versuche erschöpft | ERROR | Instanzkennung, Stapelgrösse, Ziel `chat.persist`, Fehlergrund |
+| SQL-Datenfehler / Einzelprüfung | WARN | Instanzkennung, Stapelgrösse; keine Nachrichteninhalte |
 | Ungültige Lieferung | WARN | Instanzkennung, Delivery-ID, Nachrichten-ID falls lesbar, Validierungsgrund |
 | Kanalverlust und Wiederverbindung | WARN bzw. INFO | Instanzkennung, betroffene Queue, Verbindungszustand |
 
@@ -381,6 +388,7 @@ Zusätzliche verbindliche Testprüfungen:
 - `MessagePersistenceIntegrationTest`: vollständige Feldübernahme, beide Queue-Formate mit und ohne Typheader, echte Transaktion und Rollback; kein ACK vor erfolgreichem Commit. Ein Fehler vor Commit darf keine teilweise bestätigten Zeilen erzeugen.
 - Nachweis zum ACK-Fehler: Nach erfolgreichem Commit und vor abgeschlossener Bestätigung den Consumer-Kanal unterbrechen. Nach erneuter Zustellung bleiben die Zeilen eindeutig, die Eingangsqueue wird leer und die DLQ erhält deswegen keine Nachricht.
 - `InvalidMessageIntegrationTest`: fehlerhaftes JSON, fehlendes Pflichtfeld und falscher Typ landen in der DLQ; eine danach folgende gültige Nachricht wird gespeichert. Fehlender Java-Typheader ist ausdrücklich kein Fehler.
+- `SqlFailureIsolationIntegrationTest`: 500 gültige Nachrichten in einer Transaktion; 499 gültige und ein echter CHECK-Fehler an Position 1, 250 oder 500 in getrennten Einzeltransaktionen, genau eine DLQ-Lieferung; ausserdem zwei Writer mit SQL-Datenfehler und doppelter UUID. Der zusätzliche Constraint existiert ausschliesslich im Testcontainer; der JSON-Decoder bleibt unverändert.
 - Die Pflichtfälle S5 und S7 haben die gesonderten Nachweise aus 19.6 und 19.8 mit echter Queue und echter Datenbank.
 
 Gezielte Prüfung, sobald implementiert:
@@ -515,7 +523,7 @@ docker compose logs --no-color --since 2m batch-writer
 docker compose exec rabbitmq rabbitmqctl list_queues name messages_ready messages_unacknowledged consumers
 ```
 
-Konkrete Messung: Eine unabhängige Stoppuhr startet bei Zeitpunkt null. Innerhalb von 90 Sekunden muss die Vereinigung der auf den Testlauf gefilterten Datenbank-IDs und der per nicht entfernender DLQ-Abfrage gelesenen IDs exakt den 300 Test-IDs entsprechen. Keine dieser IDs bleibt in `chat.persist`. SQL zählt jede ID höchstens einmal. DLQ-Abfrage über die interne Management-API: `POST http://rabbitmq:15672/api/queues/%2F/chat.dlq/get`, authentifiziert mit den RabbitMQ-Zugangsdaten, JSON-Body `{"count":10000,"ackmode":"ack_requeue_true","encoding":"auto","truncate":1000000}`. Der vor S7 bekannte DLQ-Bestand und die Test-IDs werden getrennt betrachtet; Bodies dürfen für den ID-Nachweis nicht abgeschnitten sein. Bei grösserem Bestand ist die Abrufgrenze passend zu erhöhen.
+Konkrete Messung: Eine unabhängige Stoppuhr startet bei Zeitpunkt null. Innerhalb von 90 Sekunden müssen die auf den Testlauf gefilterten Datenbank-IDs exakt den 300 Test-IDs entsprechen; keine dieser gültigen Nachrichten darf wegen des Ausfalls in der DLQ liegen. Keine dieser IDs bleibt in `chat.persist`. SQL zählt jede ID höchstens einmal. DLQ-Abfrage über die interne Management-API: `POST http://rabbitmq:15672/api/queues/%2F/chat.dlq/get`, authentifiziert mit den RabbitMQ-Zugangsdaten, JSON-Body `{"count":10000,"ackmode":"ack_requeue_true","encoding":"auto","truncate":1000000}`. Der vor S7 bekannte DLQ-Bestand und die Test-IDs werden getrennt betrachtet; Bodies dürfen für den ID-Nachweis nicht abgeschnitten sein. Bei grösserem Bestand ist die Abrufgrenze passend zu erhöhen.
 
 Zusätzlich nach Wiederherstellung und nach vollständiger Behandlung der 300 Testnachrichten weitere gültige Kontrollnachrichten senden. Innerhalb von zehn Sekunden nach deren letzter HTTP-Annahme müssen sie in PostgreSQL ankommen. Pro Writer ist mindestens ein neuer erfolgreicher Commit nach Wiederherstellung anhand seiner Logs nachzuweisen; falls die Queue zunächst nur einen Consumer bedient, werden weitere kleine Kontrollgruppen gesendet, bis beide nachweislich gearbeitet haben, insgesamt höchstens 30 Sekunden lang. Container-ID, Startzeit und Restart-Zähler beider Writer dürfen sich während des Tests nicht ändern. Damit ist nachgewiesen, dass nicht bloss eine Restart-Policy einen abgestürzten Writer ersetzt hat oder eine gesunde Instanz den dauerhaften Ausfall der anderen verdeckt. Diese zusätzliche Erholungsprüfung liegt ausserhalb der 90-Sekunden-Frist für die ursprünglichen 300 Nachrichten und ersetzt sie nicht.
 
@@ -539,7 +547,7 @@ Erwartung: `.env` ist nicht getrackt und wird ignoriert; keine Stream-Verwendung
 | S4: 1'000 aufgestaute Nachrichten, dann Writer-Start | Kein Verlust, höchstens 100 DB-Transaktionen | Echte Stapel in gemeinsamen Transaktionen, kein Auto-Commit pro Zeile | 19.5 |
 | S5: Gleicher JSON-Body zweimal, nur `content_type` | Eine Zeile, kein DLQ-Zuwachs | Expliziter Zieltyp, stabile ID, `ON CONFLICT (id) DO NOTHING` | 19.6 |
 | S6: Zwei Writer, 1'000 Nachrichten | Zwei Consumer, alles vorhanden, keine doppelten Zeilen | Competing Consumers, lokale Puffer, DB-Primary-Key, kein fester Containername | 19.7 |
-| S7: DB 15 Sekunden gestoppt, 300 Nachrichten | Binnen 90 Sekunden in DB oder spezifizierter DLQ; Writer ohne manuellen Neustart | Drei begrenzte Schreibversuche, Fehlerziel DLQ, automatische neue Verbindungen | 19.8 |
+| S7: DB 15 Sekunden gestoppt, 300 Nachrichten | Binnen 90 Sekunden in DB; Writer ohne manuellen Neustart | Drei begrenzte Schreibversuche je Zustellung, anschliessend Requeue, automatische neue Verbindungen | 19.8 |
 | S8: Writer-Quelltext und `.env` | CLAUDE.md erfüllt; keine Streams; Kommentare über jeder Klasse/Methode; keine `.env` im Repo | Einfacher dokumentierter Code, Git-Ignore für lokale Geheimnisse | 19.9 |
 
 Ausserhalb der acht Szenarien verlangt der Auftrag vier Abgaben: diese Spezifikation, später `docs/plan-batch-writer.md`, die Implementierung und Tests unter `batch-writer/src/test/`. Der spätere Plan muss vor der Implementierung entstehen und mit kleinen, getesteten Commits in der Git-Historie übereinstimmen. Die README-Standtabelle ist erst bei der späteren Umsetzung nachzuführen. Dieses Dokument allein behauptet keine bestandene Abnahme.
@@ -556,5 +564,5 @@ Ausserhalb der acht Szenarien verlangt der Auftrag vier Abgaben: diese Spezifika
 | S4 | 1'000 wartende Nachrichten ohne Verlust mit höchstens 100 DB-Transaktionen schreiben | 5–7, 19.5 | Messbar spezifiziert; Einhaltung muss am echten Stack nachgewiesen werden | Prefetch wird mit Batch-Grösse verwechselt; Auto-Commit oder Mess-/Verbindungsverkehr erhöht die Transaktionszahl |
 | S5 | Derselbe JSON-Body zweimal, nur `content_type`: eine Zeile und nichts in der DLQ | 3, 8–9, 14, 19.6 | Als Vorgabe ja; Null-Update-Zähler und absolute DLQ-Leere ergänzt | Typheader-Abhängigkeit, Duplikat wird als Schreibfehler gewertet oder ACK-Fehler löst fälschlich DLQ aus |
 | S6 | Zwei angeschlossene Writer, alle 1'000 Nachrichten vorhanden, keine Duplikate | 5, 12, 14, 17, 19.7 | Als Vorgabe ja; zusätzlicher Konflikttest gefordert | Gemeinsam genutzter Kanal/Puffer, feste Containernamen oder ungetestete konkurrierende Inserts |
-| S7 | PostgreSQL 15 Sekunden weg; 300 Nachrichten binnen 90 Sekunden in DB oder festgelegtem Fehlerziel; Writer erholt sich | 8, 10–12, 19.8 | DLQ ist laut Auftrag zulässig; Zeitgrenzen und Erholung beider Instanzen bleiben nachzuweisen | Drei Versuche können vor Wiederkehr erschöpft sein; 25 Sekunden pro Stapel beweisen nicht die Gesamtfrist; defekte Verbindungen oder eine dauerhaft ausgefallene Instanz |
+| S7 | PostgreSQL 15 Sekunden weg; 300 Nachrichten binnen 90 Sekunden in DB oder festgelegtem Fehlerziel; Writer erholt sich | 8, 10–12, 19.8 | Nach Code-Review strengere Vorgabe: gültige Ausfallnachrichten werden requeued und nach Erholung gespeichert | Einzelne Retry-Zyklen können vor Wiederkehr enden; Requeue muss alle IDs erhalten; defekte Verbindungen oder eine dauerhaft ausgefallene Instanz |
 | S8 | Keine Streams, Kommentare über jeder Klasse/Methode, `.env` nicht im Repo | Grundlagen, 16, 18, 19.9 | Als Vorgabe ja; Prüfbereich ausdrücklich präzisiert | Nur Hauptklassen werden kommentiert, Helfer/Tests fehlen; Textsuche wird mit vollständiger Stilprüfung verwechselt |

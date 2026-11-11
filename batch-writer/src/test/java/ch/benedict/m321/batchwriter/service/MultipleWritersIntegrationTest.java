@@ -52,7 +52,7 @@ class MultipleWritersIntegrationTest {
             AtomicInteger secondPid = new AtomicInteger();
             AtomicBoolean overlapObserved = new AtomicBoolean();
             doAnswer(invocation -> {
-                invocation.callRealMethod();
+                Object counts = invocation.callRealMethod();
                 inserted.countDown();
                 // Unterhalb des produktiven lock_timeout von 750 ms bleiben; keine Grenzwerte lockern.
                 await().pollInterval(Duration.ofMillis(10)).atMost(Duration.ofMillis(500)).until(() -> {
@@ -63,7 +63,7 @@ class MultipleWritersIntegrationTest {
                     return waiting == 1;
                 });
                 overlapObserved.set(true);
-                return null;
+                return counts;
             }).when(first).insertBatch(anyList());
             doAnswer(invocation -> {
                 boolean ready = inserted.await(1, TimeUnit.SECONDS);

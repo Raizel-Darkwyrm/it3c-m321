@@ -200,11 +200,11 @@ class MessagePersistenceIntegrationTest {
             // Im zweiten Versuch darf der zurückgerollte erste Insert nicht sichtbar sein.
             int rowsBeforeInsert = rowCount();
             assertEquals(0, rowsBeforeInsert);
-            invocation.callRealMethod();
+            Object counts = invocation.callRealMethod();
             if (transactionIds.size() == 1) {
                 throw new DataAccessResourceFailureException("Failure after insert before commit");
             }
-            return null;
+            return counts;
         }).when(repository).insertBatch(anyList());
         BatchPersistenceService persistence = new BatchPersistenceService(
                 repository, transactionManager, dataSource, timeoutExecutor);
@@ -214,9 +214,9 @@ class MessagePersistenceIntegrationTest {
         ChatMessage message = newMessage("Wiederholung nach Rollback");
         List<ChatMessage> messages = List.of(message);
 
-        boolean committed = writer.write(messages);
+        List<WriteOutcome> committed = writer.write(messages);
 
-        assertTrue(committed);
+        assertEquals(List.of(WriteOutcome.STORED), committed);
         int attemptCount = transactionIds.size();
         assertEquals(2, attemptCount);
         Long firstTransaction = transactionIds.get(0);

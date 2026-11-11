@@ -141,14 +141,16 @@ Ein Stapel wird in einer Datenbanktransaktion gespeichert. ACK folgt erst nach
 erfolgreichem Commit. `ON CONFLICT (id) DO NOTHING` macht erneute Zustellungen
 derselben ID unschädlich, ohne bestehende Inhalte zu überschreiben.
 
-Bei Datenbankschreibfehlern sind insgesamt drei Versuche mit je fünf Sekunden
-Pause zwischen den Versuchen vorgesehen. Jeder Versuch erhält eine neue
-Transaktion. Nach dem dritten Fehler lehnt der Consumer die betroffenen
-Lieferungen ohne Requeue ab; die Broker-Konfiguration leitet sie nach `chat.dlq`.
-Ungültige Nachrichten werden einzeln ohne Schreibversuche dorthin verwiesen.
-Kanalverlust und Stop sind davon getrennt: unbestätigte Lieferungen können erneut
+Bei allgemeinen Datenbankschreibfehlern sind pro Verarbeitungszyklus höchstens
+drei Versuche mit je fünf Sekunden Pause vorgesehen. Jeder Versuch erhält eine
+neue Transaktion. Danach werden offene Lieferungen mit Requeue erneut zugestellt;
+ein DB-Ausfall allein führt nicht nach `chat.dlq`. Bei einem sicher erkannten
+SQL-Datenfehler wird der Batch zurückgerollt und jede Nachricht in einer eigenen
+Transaktion verarbeitet. Gültige Nachrichten und Duplikate erhalten nach Commit
+ein ACK; nur dauerhaft fehlerhafte Nachrichten gelangen in `chat.dlq`.
+Bereits beim Decodieren ungültige Nachrichten werden ohne Schreibversuch dorthin
+verwiesen. Auch bei Kanalverlust und Stop können unbestätigte Lieferungen erneut
 zugestellt werden. Eine automatische Rückführung aus `chat.dlq` gibt es nicht.
-DB-Erholung verarbeitet neue bzw. noch offene Lieferungen, nicht automatisch die DLQ.
 
 Logs enthalten Instanzkennung, Stapelgrösse, Versuch und Fehlerziel; sie ersetzen
 keinen Abgleich von IDs, DB-Zeilen und Queue-Zustand. Die Ausfall-, Zeit- und

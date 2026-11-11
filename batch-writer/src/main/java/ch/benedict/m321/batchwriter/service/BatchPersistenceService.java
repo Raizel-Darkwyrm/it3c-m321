@@ -39,9 +39,9 @@ public class BatchPersistenceService {
     }
 
     /** Leere Stapel verursachen keine Transaktion; Fehler verlassen die Methode nach dem Rollback. */
-    public void persist(List<ChatMessage> messages) {
+    public int[] persist(List<ChatMessage> messages) {
         if (messages.isEmpty()) {
-            return;
+            return new int[0];
         }
         List<ChatMessage> batch = List.copyOf(messages);
         long started = System.nanoTime();
@@ -49,12 +49,14 @@ public class BatchPersistenceService {
         // Nach vier Sekunden abbrechen; eine Sekunde Reserve bleibt für Fehlerbehandlung und Aufräumen.
         ScheduledFuture<?> deadline = timeoutExecutor.schedule(timeout::expire, 4, TimeUnit.SECONDS);
         try {
-            transactionTemplate.executeWithoutResult(status -> insertWithDeadline(batch, timeout));
+            int[] counts = transactionTemplate.execute(status -> insertWithDeadline(batch, timeout));
             timeout.checkExpired();
             long elapsed = System.nanoTime() - started;
             if (elapsed >= 5_000_000_000L) {
                 throw new TransactionTimedOutException("Database attempt exceeded five seconds");
             }
+            // JDBC-Zähler allein erlauben kein ACK: Erst execute hat auch den Commit abgeschlossen.
+            return counts;
         } finally {
             timeout.finish();
             deadline.cancel(false);
@@ -62,12 +64,12 @@ public class BatchPersistenceService {
     }
 
     /** Überwacht dieselbe Verbindung, die JdbcTemplate innerhalb der Transaktion verwendet. */
-    private void insertWithDeadline(List<ChatMessage> batch, DatabaseAttemptTimeout timeout) {
+    private int[] insertWithDeadline(List<ChatMessage> batch, DatabaseAttemptTimeout timeout) {
         TransactionSynchronizationManager.registerSynchronization(timeout);
         Connection connection = DataSourceUtils.getConnection(dataSource);
         try {
             timeout.watch(connection);
-            messageRepository.insertBatch(batch);
+            return messageRepository.insertBatch(batch);
         } finally {
             // Bei gebundener Transaktion bleibt die Verbindung bis Commit/Rollback geöffnet.
             DataSourceUtils.releaseConnection(connection, dataSource);

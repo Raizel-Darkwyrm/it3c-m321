@@ -4,6 +4,7 @@ import ch.benedict.m321.batchwriter.config.QueueNames;
 import ch.benedict.m321.batchwriter.dto.ChatMessage;
 import ch.benedict.m321.batchwriter.service.BatchWriteService;
 import ch.benedict.m321.batchwriter.service.MessageBatch;
+import ch.benedict.m321.batchwriter.service.WriteOutcome;
 import com.rabbitmq.client.Channel;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
@@ -236,10 +237,10 @@ public class MessageConsumer {
             ChatMessage message = pending.message();
             messages.add(message);
         }
-        boolean committed;
+        List<WriteOutcome> results;
         writingThread = Thread.currentThread();
         try {
-            committed = writer.write(messages);
+            results = writer.write(messages);
         } catch (InterruptedException exception) {
             Thread currentThread = Thread.currentThread();
             currentThread.interrupt();
@@ -253,27 +254,39 @@ public class MessageConsumer {
         } finally {
             writingThread = null;
         }
-        if (stopping && !committed) {
-            // Stop ist kein DLQ-Fehlerziel; offene Lieferungen werden durch Kanalschluss erneut verfügbar.
-            closeChannel(channel);
-            return;
-        }
-        completeBatch(ready, committed);
+        completeBatch(ready, results);
     }
 
     /** Brokerfehler liegen ausserhalb des Schreibaufrufs und können keinen DB-Retry auslösen. */
-    private void completeBatch(List<PendingMessage> ready, boolean committed) {
-        for (PendingMessage pending : ready) {
+    private void completeBatch(List<PendingMessage> ready, List<WriteOutcome> results) {
+        if (results == null || results.size() != ready.size()) {
+            PendingMessage first = ready.getFirst();
+            Channel channel = first.channel();
+            closeChannel(channel);
+            return;
+        }
+        for (int i = 0; i < ready.size(); i++) {
+            PendingMessage pending = ready.get(i);
+            WriteOutcome outcome = results.get(i);
             Channel channel = pending.channel();
             long deliveryTag = pending.deliveryTag();
+            if (outcome == null) {
+                closeChannel(channel);
+                return;
+            }
             if (confirmationsClosed || !channel.isOpen()) {
                 return;
             }
             try {
-                if (committed) {
+                if (outcome == WriteOutcome.STORED || outcome == WriteOutcome.DUPLICATE) {
                     channel.basicAck(deliveryTag, false);
+                } else if (stopping) {
+                    closeChannel(channel);
+                    return;
                 } else {
-                    channel.basicNack(deliveryTag, false, false);
+                    // Nur ein dauerhafter Datenfehler geht in die DLQ; Infrastrukturfehler bleiben erneut zustellbar.
+                    boolean requeue = outcome == WriteOutcome.RETRY;
+                    channel.basicNack(deliveryTag, false, requeue);
                 }
             } catch (IOException | RuntimeException exception) {
                 log.warn("Batch acknowledgement failed: instance={}, tag={}", instanceId, deliveryTag);

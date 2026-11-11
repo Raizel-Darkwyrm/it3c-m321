@@ -224,7 +224,9 @@ Servicezustand. Ein provozierter `IOException` entfernt nur den fehlerhaften Emi
 
 **Commit:** `test: Lückenlose SSE-Neuverbindung nachweisen`
 
-**Geprüft und korrigiert:** _Noch offen._
+**Geprüft und korrigiert:** Am 11.11.2026 vier Controller- und fünf Service-Tests
+grün. Der Content-Type-Test wurde bis zum ersten asynchron geschriebenen Ereignis
+fortgeführt, weil Spring den SSE-Response vorher noch nicht finalisiert.
 
 ## Aufgabe 8 – Queue-Lebensdauer und Rückstau
 
@@ -251,7 +253,9 @@ Servicezustand. Ein provozierter `IOException` entfernt nur den fehlerhaften Emi
 
 **Commit:** `test: Begrenzten Rückstau und Queue-Abbau nachweisen`
 
-**Geprüft und korrigiert:** _Noch offen._
+**Geprüft und korrigiert:** Am 11.11.2026 vier Controller- und fünf Service-Tests
+grün. Der Content-Type-Test wurde bis zum ersten asynchron geschriebenen Ereignis
+fortgeführt, weil Spring den SSE-Response vorher noch nicht finalisiert.
 
 ## Aufgabe 9 – Unabhängigkeit von Persistenz
 

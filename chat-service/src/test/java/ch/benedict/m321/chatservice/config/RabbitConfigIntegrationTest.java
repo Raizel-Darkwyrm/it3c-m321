@@ -1,9 +1,9 @@
 package ch.benedict.m321.chatservice.config;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.core.RabbitAdmin;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -40,11 +40,12 @@ class RabbitConfigIntegrationTest {
     private RabbitAdmin rabbitAdmin;
 
     @Autowired
-    private RabbitTemplate rabbitTemplate;
-
-    @Autowired
     @Qualifier("deliveryQueue")
     private Queue deliveryQueue;
+
+    @Autowired
+    @Qualifier("deliveryBinding")
+    private Binding deliveryBinding;
 
     @Test
     void declaresPersistQueue() {
@@ -74,12 +75,10 @@ class RabbitConfigIntegrationTest {
         assertEquals("drop-head", deliveryQueue.getArguments().get("x-overflow"));
     }
 
-    /** Das Binding muss die Fanout-Kopie tatsächlich in die Instanzqueue leiten. */
+    /** Das Binding muss genau die Instanzqueue mit dem bestehenden Fanout-Exchange verbinden. */
     @Test
     void bindsDeliveryQueueToFanoutExchange() {
-        rabbitTemplate.convertAndSend(QueueNames.DELIVERY_EXCHANGE, "", "binding-probe");
-
-        Object received = rabbitTemplate.receiveAndConvert(deliveryQueue.getName(), 5000);
-        assertEquals("binding-probe", received);
+        assertEquals(deliveryQueue.getName(), deliveryBinding.getDestination());
+        assertEquals(QueueNames.DELIVERY_EXCHANGE, deliveryBinding.getExchange());
     }
 }

@@ -282,7 +282,9 @@ fortgeführt, weil Spring den SSE-Response vorher noch nicht finalisiert.
 
 **Commit:** `test: Live-Zustellung von Persistenz entkoppeln`
 
-**Geprüft und korrigiert:** _Noch offen._
+**Geprüft und korrigiert:** Am 11.11.2026 fünf RabbitMQ-Tests grün. Der bisherige
+Binding-Test durfte nach Aktivierung des Consumers nicht mehr selbst aus derselben Queue
+lesen; er prüft nun das Binding, während der neue Test die echte Zustellung beweist.
 
 ## Aufgabe 10 – Compose und Dokumentation
 
@@ -309,7 +311,9 @@ fortgeführt, weil Spring den SSE-Response vorher noch nicht finalisiert.
 
 **Commit:** `docs: Live-Zustellung und Betriebsverhalten dokumentieren`
 
-**Geprüft und korrigiert:** _Noch offen._
+**Geprüft und korrigiert:** Am 11.11.2026 fünf RabbitMQ-Tests grün. Der bisherige
+Binding-Test durfte nach Aktivierung des Consumers nicht mehr selbst aus derselben Queue
+lesen; er prüft nun das Binding, während der neue Test die echte Zustellung beweist.
 
 ## Aufgabe 11 – Vollständige Abnahme S1 bis S8
 

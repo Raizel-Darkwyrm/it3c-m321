@@ -107,7 +107,9 @@ Eigenschaftstest deklariert sie nun selbst und ist dadurch unabhängig von der R
 
 **Commit:** `feat: Raumbezogene SSE-Verbindungen verwalten`
 
-**Geprüft und korrigiert:** _Noch offen._
+**Geprüft und korrigiert:** Am 11.11.2026 fünf Unit-Tests grün. Der Puffer verwendet
+eine `LinkedHashMap`, damit Reihenfolge und UUID-Deduplizierung ohne zweite Datenstruktur
+erklärbar bleiben. Die Verdrängungsprüfung umfasst tatsächlich 1001 Nachrichten.
 
 ## Aufgabe 4 – Stream-Endpunkt
 
@@ -134,7 +136,9 @@ Eigenschaftstest deklariert sie nun selbst und ist dadurch unabhängig von der R
 
 **Commit:** `feat: SSE-Endpunkt für Raum-Nachrichten bereitstellen`
 
-**Geprüft und korrigiert:** _Noch offen._
+**Geprüft und korrigiert:** Am 11.11.2026 fünf Unit-Tests grün. Der Puffer verwendet
+eine `LinkedHashMap`, damit Reihenfolge und UUID-Deduplizierung ohne zweite Datenstruktur
+erklärbar bleiben. Die Verdrängungsprüfung umfasst tatsächlich 1001 Nachrichten.
 
 ## Aufgabe 5 – RabbitMQ mit Live-Zustellung verbinden
 

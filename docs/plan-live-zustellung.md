@@ -77,9 +77,9 @@ als Defaultwerte gesetzt werden, damit `application.yml` sie nicht überschreibt
 
 **Commit:** `feat: Replay-Puffer für Live-Nachrichten ergänzen`
 
-**Geprüft und korrigiert:** Am 11.11.2026 mit echtem RabbitMQ geprüft: vier Tests grün.
-Der erste Testentwurf teilte eine Auto-Delete-Queue zwischen Testmethoden. Der
-Eigenschaftstest deklariert sie nun selbst und ist dadurch unabhängig von der Reihenfolge.
+**Geprüft und korrigiert:** Am 11.11.2026 fünf Unit-Tests grün. Der Puffer verwendet
+eine `LinkedHashMap`, damit Reihenfolge und UUID-Deduplizierung ohne zweite Datenstruktur
+erklärbar bleiben. Die Verdrängungsprüfung umfasst tatsächlich 1001 Nachrichten.
 
 ## Aufgabe 3 – SSE-Verbindungen verwalten
 
@@ -107,9 +107,9 @@ Eigenschaftstest deklariert sie nun selbst und ist dadurch unabhängig von der R
 
 **Commit:** `feat: Raumbezogene SSE-Verbindungen verwalten`
 
-**Geprüft und korrigiert:** Am 11.11.2026 fünf Unit-Tests grün. Der Puffer verwendet
-eine `LinkedHashMap`, damit Reihenfolge und UUID-Deduplizierung ohne zweite Datenstruktur
-erklärbar bleiben. Die Verdrängungsprüfung umfasst tatsächlich 1001 Nachrichten.
+**Geprüft und korrigiert:** Am 11.11.2026 fünf Live-Service- und fünf Puffer-Tests
+grün. Replay, Registrierung und Live-Verteilung verwenden denselben synchronisierten
+Servicezustand. Ein provozierter `IOException` entfernt nur den fehlerhaften Emitter.
 
 ## Aufgabe 4 – Stream-Endpunkt
 
@@ -136,9 +136,9 @@ erklärbar bleiben. Die Verdrängungsprüfung umfasst tatsächlich 1001 Nachrich
 
 **Commit:** `feat: SSE-Endpunkt für Raum-Nachrichten bereitstellen`
 
-**Geprüft und korrigiert:** Am 11.11.2026 fünf Unit-Tests grün. Der Puffer verwendet
-eine `LinkedHashMap`, damit Reihenfolge und UUID-Deduplizierung ohne zweite Datenstruktur
-erklärbar bleiben. Die Verdrängungsprüfung umfasst tatsächlich 1001 Nachrichten.
+**Geprüft und korrigiert:** Am 11.11.2026 vier Controller- und fünf Service-Tests
+grün. Der Content-Type-Test wurde bis zum ersten asynchron geschriebenen Ereignis
+fortgeführt, weil Spring den SSE-Response vorher noch nicht finalisiert.
 
 ## Aufgabe 5 – RabbitMQ mit Live-Zustellung verbinden
 
@@ -165,9 +165,9 @@ erklärbar bleiben. Die Verdrängungsprüfung umfasst tatsächlich 1001 Nachrich
 
 **Commit:** `feat: Fanout-Nachrichten live an SSE-Clients zustellen`
 
-**Geprüft und korrigiert:** Am 11.11.2026 fünf Live-Service- und fünf Puffer-Tests
-grün. Replay, Registrierung und Live-Verteilung verwenden denselben synchronisierten
-Servicezustand. Ein provozierter `IOException` entfernt nur den fehlerhaften Emitter.
+**Geprüft und korrigiert:** Am 11.11.2026 fünf RabbitMQ-Tests grün. Der bisherige
+Binding-Test durfte nach Aktivierung des Consumers nicht mehr selbst aus derselben Queue
+lesen; er prüft nun das Binding, während der neue Test die echte Zustellung beweist.
 
 ## Aufgabe 6 – Zwei Instanzen nachweisen
 
@@ -195,9 +195,10 @@ Servicezustand. Ein provozierter `IOException` entfernt nur den fehlerhaften Emi
 
 **Commit:** `test: Live-Zustellung über zwei Instanzen nachweisen`
 
-**Geprüft und korrigiert:** Am 11.11.2026 fünf Live-Service- und fünf Puffer-Tests
-grün. Replay, Registrierung und Live-Verteilung verwenden denselben synchronisierten
-Servicezustand. Ein provozierter `IOException` entfernt nur den fehlerhaften Emitter.
+**Geprüft und korrigiert:** Am 11.11.2026 S3 mit zwei echten HTTP-Servern, RabbitMQ,
+drei SSE-Clients und 400 Nachrichten grün. Der erste Lauf zeigte einen Servlet-Timeout
+nach 30 Sekunden; der produktive Emitter verwendet nun eine ausdrücklich lange Laufzeit.
+Testserver beenden offene Testverbindungen mit sofortigem Shutdown.
 
 ## Aufgabe 7 – Neuverbindung nachweisen
 
@@ -224,9 +225,9 @@ Servicezustand. Ein provozierter `IOException` entfernt nur den fehlerhaften Emi
 
 **Commit:** `test: Lückenlose SSE-Neuverbindung nachweisen`
 
-**Geprüft und korrigiert:** Am 11.11.2026 vier Controller- und fünf Service-Tests
-grün. Der Content-Type-Test wurde bis zum ersten asynchron geschriebenen Ereignis
-fortgeführt, weil Spring den SSE-Response vorher noch nicht finalisiert.
+**Geprüft und korrigiert:** Am 11.11.2026 S7 mit echtem HTTP, SSE und RabbitMQ grün.
+Nach zehn Sekunden Trennung kamen exakt 50 nummerierte Nachrichten, danach eine neue
+Live-Nachricht; ein unbekannter Cursor ergab HTTP 409.
 
 ## Aufgabe 8 – Queue-Lebensdauer und Rückstau
 
@@ -253,9 +254,7 @@ fortgeführt, weil Spring den SSE-Response vorher noch nicht finalisiert.
 
 **Commit:** `test: Begrenzten Rückstau und Queue-Abbau nachweisen`
 
-**Geprüft und korrigiert:** Am 11.11.2026 vier Controller- und fünf Service-Tests
-grün. Der Content-Type-Test wurde bis zum ersten asynchron geschriebenen Ereignis
-fortgeführt, weil Spring den SSE-Response vorher noch nicht finalisiert.
+**Geprüft und korrigiert:** _Noch offen._
 
 ## Aufgabe 9 – Unabhängigkeit von Persistenz
 
@@ -282,9 +281,7 @@ fortgeführt, weil Spring den SSE-Response vorher noch nicht finalisiert.
 
 **Commit:** `test: Live-Zustellung von Persistenz entkoppeln`
 
-**Geprüft und korrigiert:** Am 11.11.2026 fünf RabbitMQ-Tests grün. Der bisherige
-Binding-Test durfte nach Aktivierung des Consumers nicht mehr selbst aus derselben Queue
-lesen; er prüft nun das Binding, während der neue Test die echte Zustellung beweist.
+**Geprüft und korrigiert:** _Noch offen._
 
 ## Aufgabe 10 – Compose und Dokumentation
 
@@ -311,9 +308,7 @@ lesen; er prüft nun das Binding, während der neue Test die echte Zustellung be
 
 **Commit:** `docs: Live-Zustellung und Betriebsverhalten dokumentieren`
 
-**Geprüft und korrigiert:** Am 11.11.2026 fünf RabbitMQ-Tests grün. Der bisherige
-Binding-Test durfte nach Aktivierung des Consumers nicht mehr selbst aus derselben Queue
-lesen; er prüft nun das Binding, während der neue Test die echte Zustellung beweist.
+**Geprüft und korrigiert:** _Noch offen._
 
 ## Aufgabe 11 – Vollständige Abnahme S1 bis S8
 
@@ -341,10 +336,7 @@ lesen; er prüft nun das Binding, während der neue Test die echte Zustellung be
 
 **Commit:** `test: Abnahme der Live-Zustellung dokumentieren`
 
-**Geprüft und korrigiert:** Am 11.11.2026 S3 mit zwei echten HTTP-Servern, RabbitMQ,
-drei SSE-Clients und 400 Nachrichten grün. Der erste Lauf zeigte einen Servlet-Timeout
-nach 30 Sekunden; der produktive Emitter verwendet nun eine ausdrücklich lange Laufzeit.
-Testserver beenden offene Testverbindungen mit sofortigem Shutdown.
+**Geprüft und korrigiert:** _Noch offen._
 
 ## Aufgabe 12 – Finaler Abgabecheck und Tag
 
@@ -371,10 +363,7 @@ Testserver beenden offene Testverbindungen mit sofortigem Shutdown.
 
 **Commit:** Kein zusätzlicher Commit; nur Tag nach erfolgreicher Prüfung.
 
-**Geprüft und korrigiert:** Am 11.11.2026 S3 mit zwei echten HTTP-Servern, RabbitMQ,
-drei SSE-Clients und 400 Nachrichten grün. Der erste Lauf zeigte einen Servlet-Timeout
-nach 30 Sekunden; der produktive Emitter verwendet nun eine ausdrücklich lange Laufzeit.
-Testserver beenden offene Testverbindungen mit sofortigem Shutdown.
+**Geprüft und korrigiert:** _Noch offen._
 
 ## Planänderungen
 

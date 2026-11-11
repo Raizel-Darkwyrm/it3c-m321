@@ -313,7 +313,10 @@ Nachrichten warteten gleichzeitig in `chat.persist`.
 
 **Commit:** `docs: Live-Zustellung und Betriebsverhalten dokumentieren`
 
-**Geprüft und korrigiert:** _Noch offen._
+**Geprüft und korrigiert:** Am 11.11.2026 war `docker compose --env-file
+.env.example config` gültig: vier Dienste im `chat-net`, keine Host-Ports und kein
+`container_name`. Compose und `.env.example` brauchten keine Änderung; README beschreibt
+nun SSE, Instanzqueue, Replay, Skalierung und den noch offenen Gesamtnachweis.
 
 ## Aufgabe 11 – Vollständige Abnahme S1 bis S8
 

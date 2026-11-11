@@ -57,7 +57,7 @@ des Gesamtsystems gehört später dem Gateway.
 
 | Baustein | Technologie | Aufgabe | Stand |
 |---|---|---|---|
-| chat-service | Spring Boot 3, Java 21 | Nimmt Nachrichten per `POST /messages` an, legt sie auf Queue und Fanout-Exchange | vorhanden |
+| chat-service | Spring Boot 3, Java 21, SSE | Nimmt Nachrichten per `POST /messages` an und liefert sie mit `GET /stream` raumbezogen live aus | Bewertung 2 implementiert; Gesamtabnahme noch offen |
 | rabbitmq | RabbitMQ 3.13 | Message Queue zwischen den Services | vorhanden |
 | batch-writer | Spring Boot 3, Java 21, JdbcTemplate | Speichert Nachrichten aus `chat.persist` stapelweise | implementiert; S1–S8 nachgewiesen, Ablaufgrenzen siehe Prüfprotokoll |
 | postgres | PostgreSQL 16 | Tabelle `message` für persistierte Nachrichten | Schema, Compose-Betrieb, Ausfall/Erholung und Datenerhalt geprüft |
@@ -132,6 +132,39 @@ Consumer auf `chat.persist` erwartet. Beide teilen Queue und Tabelle, haben aber
 eigene Puffer und Verbindungen. Eine Verteilung von exakt 50:50 ist nicht verlangt.
 Mit `docker compose up -d --scale batch-writer=1` lässt sich wieder eine Instanz betreiben.
 
+## Live-Zustellung aus Bewertung 2
+
+Jede `chat-service`-Instanz besitzt eine eigene exklusive Queue am Fanout-Exchange
+`chat.delivery`. Dadurch sieht jede Instanz jede Nachricht und kann sie an ihre eigenen
+SSE-Clients verteilen. Die Queue hält höchstens 1000 wartende Live-Kopien; bei Überlauf
+entfernt RabbitMQ die älteste. Beim Ende einer Instanz verschwindet ihre Queue automatisch.
+
+Der Stream ist nur im internen Netz erreichbar:
+
+```http
+GET /stream?roomId=<UUID>
+Accept: text/event-stream
+Last-Event-ID: <UUID>
+```
+
+`Last-Event-ID` ist optional. Eine bekannte ID liefert die späteren Nachrichten desselben
+Raums aus dem lokalen 1000er-Replay-Puffer und wechselt danach wieder in den Live-Modus.
+Eine unbekannte oder verdrängte ID ergibt HTTP 409. Jedes Ereignis enthält die
+Nachrichten-ID in `id:` und das vollständige sechs Felder umfassende JSON in `data:`.
+
+Zum Skalieren bleibt `chat-service` ohne festen Containernamen und ohne Host-Port:
+
+```bash
+docker compose --env-file .env.example up -d --build --scale chat-service=2
+docker compose exec rabbitmq rabbitmqctl list_queues name consumers messages_ready
+```
+
+Die Live-Zustellung benötigt weder PostgreSQL noch den `batch-writer`. Nachrichten warten
+bei deren Ausfall weiterhin in `chat.persist`, während der SSE-Weg über `chat.delivery`
+aktiv bleibt. Gezielte Integrationstests decken zwei Instanzen mit 400 Nachrichten,
+Neuverbindung mit 50 Nachrichten, die 1000er-Rückstaugrenze und 100 Live-Nachrichten
+ohne Persistenzdienste ab. Der vollständige S1–S8-Nachweis folgt im Testprotokoll.
+
 ## Speicherung und Fehlerverhalten
 
 Der implementierte Ablauf sammelt höchstens 500 Nachrichten; ein Teilstapel wird
@@ -195,6 +228,8 @@ Testdaten sind verbindlich; keine Queues oder Volumes zwischen Szenarien lösche
 - [`CLAUDE.md`](CLAUDE.md) — Codestil-Regeln für dieses Projekt. Gelten auch für dich.
 - [`docs/spec-batch-writer.md`](docs/spec-batch-writer.md) — verbindlicher Vertrag und S1–S8-Abnahmekriterien.
 - [`docs/plan-batch-writer.md`](docs/plan-batch-writer.md) — Implementierungsaufgaben und offene Nachweise.
+- [`docs/spec-live-zustellung.md`](docs/spec-live-zustellung.md) — SSE-, Queue- und Replay-Vertrag für Bewertung 2.
+- [`docs/plan-live-zustellung.md`](docs/plan-live-zustellung.md) — vor der Implementierung gepushter Aufgabenplan für Bewertung 2.
 - [`docs/flipchart-chat-app.png`](docs/flipchart-chat-app.png) — das Flipchart aus der Lektion,
   von dem die Planung ausgeht.
 

@@ -284,7 +284,9 @@ ready-Nachrichten begrenzt und der Consumer verarbeitete danach Kontrollnachrich
 
 **Commit:** `test: Live-Zustellung von Persistenz entkoppeln`
 
-**Geprüft und korrigiert:** _Noch offen._
+**Geprüft und korrigiert:** Am 11.11.2026 mit nur RabbitMQ und `chat-service` grün.
+Alle 100 IDs kamen innerhalb der Fünf-Sekunden-Grenze per SSE an und genau 100
+Nachrichten warteten gleichzeitig in `chat.persist`.
 
 ## Aufgabe 10 – Compose und Dokumentation
 

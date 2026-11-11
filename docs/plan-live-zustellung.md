@@ -165,7 +165,9 @@ erklärbar bleiben. Die Verdrängungsprüfung umfasst tatsächlich 1001 Nachrich
 
 **Commit:** `feat: Fanout-Nachrichten live an SSE-Clients zustellen`
 
-**Geprüft und korrigiert:** _Noch offen._
+**Geprüft und korrigiert:** Am 11.11.2026 fünf Live-Service- und fünf Puffer-Tests
+grün. Replay, Registrierung und Live-Verteilung verwenden denselben synchronisierten
+Servicezustand. Ein provozierter `IOException` entfernt nur den fehlerhaften Emitter.
 
 ## Aufgabe 6 – Zwei Instanzen nachweisen
 
@@ -193,7 +195,9 @@ erklärbar bleiben. Die Verdrängungsprüfung umfasst tatsächlich 1001 Nachrich
 
 **Commit:** `test: Live-Zustellung über zwei Instanzen nachweisen`
 
-**Geprüft und korrigiert:** _Noch offen._
+**Geprüft und korrigiert:** Am 11.11.2026 fünf Live-Service- und fünf Puffer-Tests
+grün. Replay, Registrierung und Live-Verteilung verwenden denselben synchronisierten
+Servicezustand. Ein provozierter `IOException` entfernt nur den fehlerhaften Emitter.
 
 ## Aufgabe 7 – Neuverbindung nachweisen
 

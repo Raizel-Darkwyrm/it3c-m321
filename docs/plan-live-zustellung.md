@@ -344,7 +344,10 @@ nun SSE, Instanzqueue, Replay, Skalierung und den noch offenen Gesamtnachweis.
 
 **Commit:** `test: Abnahme der Live-Zustellung dokumentieren`
 
-**Geprüft und korrigiert:** _Noch offen._
+**Geprüft und korrigiert:** Am 12.11.2026 vollständig abgenommen. Der Root-Mavenlauf
+bestand mit 182 Tests ohne Fehler oder übersprungene Tests. S2 bis S7 wurden zusätzlich
+praktisch im Compose-Stack geprüft; S8 bestand die statische Prüfung. Befehle, Messwerte
+und Grenzen stehen in `docs/test-live-zustellung.md`.
 
 ## Aufgabe 12 – Finaler Abgabecheck und Tag
 

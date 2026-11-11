@@ -23,14 +23,14 @@ Alle Aufgaben werden in **deinem Fork** gelöst. Das Original-Repository bleibt 
 
 ## Bauen, testen, starten
 
-Stand 02.10.2026 nach Docker-Nachholung: Der vollständige Root-Testlauf besteht
-mit 141 Tests einschliesslich echter RabbitMQ-/PostgreSQL-Integrationstests.
-Image-Build, Frischstart und S2–S7 wurden praktisch geprüft; S4 benötigt bei
-1.000 wartenden Nachrichten 6 gemessene DB-Transaktionen. Die Compose-Prüfung
-erfolgte nach Skriptkorrekturen in Fortsetzungsläufen. S8 wurde manuell/statisch
-geprüft und für die vier Kriterien bestanden: keine Streams, Kommentare über allen
-eigenen Klassen und Methoden, `.env` nicht getrackt. Details und Grenzen stehen
-im [Prüfprotokoll](docs/test-batch-writer.md).
+Stand 12.11.2026: Der vollständige Root-Testlauf besteht mit 182 Tests, darunter
+echte RabbitMQ-/PostgreSQL-Integrationstests. Bewertung 2 wurde zusätzlich mit
+einem frischen Compose-Start und den Szenarien S2–S7 praktisch geprüft. S8 wurde
+statisch bestanden: keine Streams, Kommentare über allen eigenen Klassen und
+Methoden sowie keine getrackte `.env`. Details zur Live-Zustellung stehen im
+[Prüfprotokoll Bewertung 2](docs/test-live-zustellung.md). Die historischen
+Ergebnisse des Batch-Writers stehen weiterhin im
+[Prüfprotokoll Bewertung 1](docs/test-batch-writer.md).
 
 Aus der Projektwurzel, mit laufendem Docker und Compose sowie Java 21/Maven:
 
@@ -57,7 +57,7 @@ des Gesamtsystems gehört später dem Gateway.
 
 | Baustein | Technologie | Aufgabe | Stand |
 |---|---|---|---|
-| chat-service | Spring Boot 3, Java 21, SSE | Nimmt Nachrichten per `POST /messages` an und liefert sie mit `GET /stream` raumbezogen live aus | Bewertung 2 implementiert; Gesamtabnahme noch offen |
+| chat-service | Spring Boot 3, Java 21, SSE | Nimmt Nachrichten per `POST /messages` an und liefert sie mit `GET /stream` raumbezogen live aus | Bewertung 2 implementiert; S1–S8 nachgewiesen |
 | rabbitmq | RabbitMQ 3.13 | Message Queue zwischen den Services | vorhanden |
 | batch-writer | Spring Boot 3, Java 21, JdbcTemplate | Speichert Nachrichten aus `chat.persist` stapelweise | implementiert; S1–S8 nachgewiesen, Ablaufgrenzen siehe Prüfprotokoll |
 | postgres | PostgreSQL 16 | Tabelle `message` für persistierte Nachrichten | Schema, Compose-Betrieb, Ausfall/Erholung und Datenerhalt geprüft |
@@ -163,7 +163,8 @@ Die Live-Zustellung benötigt weder PostgreSQL noch den `batch-writer`. Nachrich
 bei deren Ausfall weiterhin in `chat.persist`, während der SSE-Weg über `chat.delivery`
 aktiv bleibt. Gezielte Integrationstests decken zwei Instanzen mit 400 Nachrichten,
 Neuverbindung mit 50 Nachrichten, die 1000er-Rückstaugrenze und 100 Live-Nachrichten
-ohne Persistenzdienste ab. Der vollständige S1–S8-Nachweis folgt im Testprotokoll.
+ohne Persistenzdienste ab. Der vollständige S1–S8-Nachweis steht im
+[Prüfprotokoll der Live-Zustellung](docs/test-live-zustellung.md).
 
 ## Speicherung und Fehlerverhalten
 

@@ -46,7 +46,11 @@ in dieser Aufgabe noch keinen Consumer erwarten.
 
 **Commit:** `feat: Instanzqueues für Live-Zustellung einrichten`
 
-**Geprüft und korrigiert:** _Noch offen._
+**Geprüft und korrigiert:** Am 11.11.2026 mit echtem RabbitMQ geprüft: fünf Tests grün.
+Der erste Testentwurf teilte eine Auto-Delete-Queue zwischen Testmethoden. Der
+Eigenschaftstest deklariert sie nun selbst und ist dadurch unabhängig von der Reihenfolge.
+Beim Zwei-Kontext-Test mussten die Container-Verbindungswerte als Startargumente statt
+als Defaultwerte gesetzt werden, damit `application.yml` sie nicht überschreibt.
 
 ## Aufgabe 2 – Begrenzter Replay-Puffer
 
@@ -73,7 +77,9 @@ in dieser Aufgabe noch keinen Consumer erwarten.
 
 **Commit:** `feat: Replay-Puffer für Live-Nachrichten ergänzen`
 
-**Geprüft und korrigiert:** _Noch offen._
+**Geprüft und korrigiert:** Am 11.11.2026 mit echtem RabbitMQ geprüft: vier Tests grün.
+Der erste Testentwurf teilte eine Auto-Delete-Queue zwischen Testmethoden. Der
+Eigenschaftstest deklariert sie nun selbst und ist dadurch unabhängig von der Reihenfolge.
 
 ## Aufgabe 3 – SSE-Verbindungen verwalten
 

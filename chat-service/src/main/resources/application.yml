@@ -8,6 +8,8 @@ spring:
     port: 5672
     username: ${RABBITMQ_USER:guest}
     password: ${RABBITMQ_PASSWORD:guest}
+    # Eine verschwundene Instanz soll ihre exklusive Zustellqueue rasch freigeben.
+    requested-heartbeat: 5s
 
 server:
   port: 8080

@@ -63,7 +63,7 @@ public class LiveMessageService {
 
     /** Die schmale Erzeugungsstelle ermöglicht kontrollierte Emitter in Unit-Tests. */
     SseEmitter newEmitter() {
-        return new SseEmitter(0L);
+        return new SseEmitter(Long.MAX_VALUE);
     }
 
     /** Entfernt abgeschlossene und fehlerhafte Verbindungen auch ohne weitere Nachricht. */

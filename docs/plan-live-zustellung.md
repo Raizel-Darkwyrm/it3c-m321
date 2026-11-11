@@ -341,7 +341,10 @@ lesen; er prüft nun das Binding, während der neue Test die echte Zustellung be
 
 **Commit:** `test: Abnahme der Live-Zustellung dokumentieren`
 
-**Geprüft und korrigiert:** _Noch offen._
+**Geprüft und korrigiert:** Am 11.11.2026 S3 mit zwei echten HTTP-Servern, RabbitMQ,
+drei SSE-Clients und 400 Nachrichten grün. Der erste Lauf zeigte einen Servlet-Timeout
+nach 30 Sekunden; der produktive Emitter verwendet nun eine ausdrücklich lange Laufzeit.
+Testserver beenden offene Testverbindungen mit sofortigem Shutdown.
 
 ## Aufgabe 12 – Finaler Abgabecheck und Tag
 
@@ -368,7 +371,10 @@ lesen; er prüft nun das Binding, während der neue Test die echte Zustellung be
 
 **Commit:** Kein zusätzlicher Commit; nur Tag nach erfolgreicher Prüfung.
 
-**Geprüft und korrigiert:** _Noch offen._
+**Geprüft und korrigiert:** Am 11.11.2026 S3 mit zwei echten HTTP-Servern, RabbitMQ,
+drei SSE-Clients und 400 Nachrichten grün. Der erste Lauf zeigte einen Servlet-Timeout
+nach 30 Sekunden; der produktive Emitter verwendet nun eine ausdrücklich lange Laufzeit.
+Testserver beenden offene Testverbindungen mit sofortigem Shutdown.
 
 ## Planänderungen
 

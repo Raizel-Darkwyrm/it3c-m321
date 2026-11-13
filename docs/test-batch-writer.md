@@ -219,5 +219,5 @@ durch manuelle/statische Prüfung. Datenerhalt beim Ersetzen der
 Infrastrukturcontainer ist bestätigt; die gemessene Stop-Dauer gilt für zwei
 untätige Writer. Die Nachweise stammen aus den oben beschriebenen Läufen und
 Fortsetzungen, nicht aus einem ununterbrochenen Lauf des endgültigen Skripts.
-**Der Abgabe-Tag wurde noch nicht gesetzt. Ein finaler Git-/Abgabecheck steht
-noch aus.**
+**Der damalige offene Abgabeschritt ist abgeschlossen: `bewertung-1` wurde nach dem
+finalen Git-/Abgabecheck gesetzt und bleibt auf dem geprüften Commit `a24a073`.**

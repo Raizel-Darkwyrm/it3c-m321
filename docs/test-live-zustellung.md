@@ -6,7 +6,8 @@ Stand: 12.11.2026. Geprüfter Commit vor diesem Dokument: `b6b67d1`.
 
 Die Szenarien S1 bis S8 sind nachgewiesen. Der Maven-Gesamtlauf, die automatisierten
 Integrationstests und die praktische Compose-Abnahme waren erfolgreich. Es bestehen keine
-offenen fachlichen Blocker. Der Abgabe-Tag wird erst nach dem finalen Git-Check gesetzt.
+offenen fachlichen Blocker. Der Abgabe-Tag wurde nach dem finalen Git-Check gesetzt und
+nach der abschließenden reinen Textkorrektur auf den aktuellen Abgabecommit verschoben.
 
 ## Umgebung
 
